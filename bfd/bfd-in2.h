@@ -4395,6 +4395,9 @@ number for the SBIC, SBIS, SBI and CBI instructions  */
   BFD_RELOC_RISCV_SET16,
   BFD_RELOC_RISCV_SET32,
   BFD_RELOC_RISCV_32_PCREL,
+/* CORE-V Specific Relocations.  */
+  BFD_RELOC_RISCV_REL12,
+  BFD_RELOC_RISCV_RELU5,
 
 /* CORE-V relocations.  */
   BFD_RELOC_RISCV_CVPCREL_UI12,
