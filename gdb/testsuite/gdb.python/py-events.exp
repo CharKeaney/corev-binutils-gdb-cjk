@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2020 Free Software Foundation, Inc.
+# Copyright (C) 2010-2021 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -234,4 +234,4 @@ gdb_test_no_output "set variable \$x = 32" "do something"
 gdb_test "python print(count)" 2 "check for before_prompt event"
 
 gdb_test_no_output "xxz" "run a canned sequence"
-gdb_test "python print(count)" 4 "check for before_prompt event"
+gdb_test "python print(count)" 4 "check for before_prompt event again"

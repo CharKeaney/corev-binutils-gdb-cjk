@@ -1,5 +1,5 @@
 /* eBPF simulator support code
-   Copyright (C) 2020 Free Software Foundation, Inc.
+   Copyright (C) 2020-2021 Free Software Foundation, Inc.
 
    This file is part of GDB, the GNU debugger.
 
@@ -16,6 +16,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #define WANT_CPU_BPFBF
 #define WANT_CPU bpfbf
 
@@ -27,6 +30,7 @@
 #include "decode.h"
 
 #include "defs-le.h"  /* For SCACHE */
+#include "bpf-helpers.h"
 
 /* It is not possible to include both defs-le.h and defs-be.h due to
    duplicated definitions, so we need a bunch of forward declarations
@@ -204,7 +208,7 @@ bpfbf_breakpoint (SIM_CPU *current_cpu)
    several ISAs.  This should be fixed in CGEN.  */
 
 static void
-bpf_def_model_init ()
+bpf_def_model_init (void)
 {
   /* Do nothing.  */
 }

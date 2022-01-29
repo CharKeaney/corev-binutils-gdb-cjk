@@ -1,6 +1,6 @@
 /* frv simulator fr500 dependent profiling code.
 
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
    Contributed by Red Hat
 
 This file is part of the GNU simulators.
@@ -16,9 +16,11 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-*/
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #define WANT_CPU
 #define WANT_CPU_FRVBF
 
@@ -124,12 +126,14 @@ set_use_not_cc_complex (SIM_CPU *cpu, INT cc)
   d->cur_cc_complex &= ~(((DI)1) << (cc));
 }
 
+#if 0
 static int
 use_is_cc_complex (SIM_CPU *cpu, INT cc)
 {
   MODEL_FR500_DATA *d = CPU_MODEL_DATA (cpu);
   return d->prev_cc_complex &   (((DI)1) << (cc));
 }
+#endif
 
 void
 fr500_reset_fr_flags (SIM_CPU *cpu, INT fr)

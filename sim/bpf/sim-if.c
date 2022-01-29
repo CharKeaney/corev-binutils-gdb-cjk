@@ -1,5 +1,5 @@
 /* Main simulator entry points specific to the eBPF.
-   Copyright (C) 2020 Free Software Foundation, Inc.
+   Copyright (C) 2020-2021 Free Software Foundation, Inc.
 
    This file is part of GDB, the GNU debugger.
 
@@ -15,6 +15,11 @@
 
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
+
+/* This must come before any other includes.  */
+#include "defs.h"
+
+#include <stdlib.h>
 
 #include "sim-main.h"
 #include "sim-options.h"
@@ -120,8 +125,7 @@ sim_open (SIM_OPEN_KIND kind,
 
   SIM_DESC sd = sim_state_alloc (kind, callback);
 
-  if (sim_cpu_alloc_all (sd, 1, cgen_cpu_max_extra_bytes ())
-      != SIM_RC_OK)
+  if (sim_cpu_alloc_all (sd, 1) != SIM_RC_OK)
     goto error;
 
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)

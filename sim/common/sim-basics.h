@@ -1,6 +1,6 @@
 /* The common simulator framework for GDB, the GNU Debugger.
 
-   Copyright 2002-2020 Free Software Foundation, Inc.
+   Copyright 2002-2021 Free Software Foundation, Inc.
 
    Contributed by Andrew Cagney and Red Hat.
 
@@ -26,9 +26,7 @@
 
 /* Basic configuration */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include "defs.h"
 
 /* Basic host dependant mess - hopefully <stdio.h> + <stdarg.h> will
    bring potential conflicts out in the open */
@@ -36,11 +34,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <setjmp.h>
-
-#ifdef __CYGWIN32__
-extern int vasprintf (char **result, const char *format, va_list args);
-extern int asprintf (char **result, const char *format, ...);
-#endif
 
 
 #ifndef NULL
@@ -53,15 +46,6 @@ extern int asprintf (char **result, const char *format, ...);
 #endif
 #ifndef max
 #define max(a, b) ((a) > (b) ? (a) : (b))
-#endif
-
-
-/* Some versions of GCC include an attribute operator, define it */
-
-#if !defined (__attribute__)
-#if (!defined(__GNUC__) || (__GNUC__ < 2) || (__GNUC__ == 2 && __GNUC_MINOR__ < 6))
-#define __attribute__(arg)
-#endif
 #endif
 
 
@@ -133,8 +117,8 @@ typedef enum {
 /* Basic definitions - ordered so that nothing calls what comes after it.  */
 
 #include "ansidecl.h"
-#include "gdb/callback.h"
-#include "gdb/remote-sim.h"
+#include "sim/callback.h"
+#include "sim/sim.h"
 
 #include "sim-config.h"
 

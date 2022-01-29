@@ -1,6 +1,6 @@
 /* Everything about catch/throw catchpoints, for GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -300,7 +300,7 @@ print_one_detail_exception_catchpoint (const struct breakpoint *b,
   if (!cp->exception_rx.empty ())
     {
       uiout->text (_("\tmatching: "));
-      uiout->field_string ("regexp", cp->exception_rx.c_str ());
+      uiout->field_string ("regexp", cp->exception_rx);
       uiout->text ("\n");
     }
 }
@@ -544,19 +544,19 @@ _initialize_break_catch_throw ()
   add_catch_command ("catch", _("\
 Catch an exception, when caught."),
 		     catch_catch_command,
-                     NULL,
+		     NULL,
 		     CATCH_PERMANENT,
 		     CATCH_TEMPORARY);
   add_catch_command ("throw", _("\
 Catch an exception, when thrown."),
 		     catch_throw_command,
-                     NULL,
+		     NULL,
 		     CATCH_PERMANENT,
 		     CATCH_TEMPORARY);
   add_catch_command ("rethrow", _("\
 Catch an exception, when rethrown."),
 		     catch_rethrow_command,
-                     NULL,
+		     NULL,
 		     CATCH_PERMANENT,
 		     CATCH_TEMPORARY);
 

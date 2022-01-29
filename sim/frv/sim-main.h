@@ -1,5 +1,5 @@
 /* frv simulator support code
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
    Contributed by Red Hat.
 
 This file is part of the GNU simulators.
@@ -18,10 +18,6 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* Main header for the frv.  */
-
-/* sim-basics.h includes config.h but cgen-types.h must be included before
-   sim-basics.h and cgen-types.h needs config.h.  */
-#include "config.h"
 
 /* This is a global setting.  Different cpu families can't mix-n-match -scache
    and -pbb.  However some cpu families may use -simple while others use
@@ -106,16 +102,6 @@ struct _sim_cpu {
   unsigned long elf_flags;
 #define CPU_ELF_FLAGS(cpu) ((cpu)->elf_flags)
 #endif /* defined (WANT_CPU_FRVBF) */
-};
-
-/* The sim_state struct.  */
-
-struct sim_state {
-  sim_cpu *cpu[MAX_NR_PROCESSORS];
-
-  CGEN_STATE cgen_state;
-
-  sim_state_base base;
 };
 
 /* Misc.  */

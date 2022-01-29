@@ -1,5 +1,5 @@
 /* Emulation of eBPF helpers.
-   Copyright (C) 2020 Free Software Foundation, Inc.
+   Copyright (C) 2020-2021 Free Software Foundation, Inc.
 
    This file is part of GDB, the GNU debugger.
 
@@ -20,6 +20,9 @@
    which are provided by the kernel.  This simulator provides an
    implementation of the helpers, which can be customized by the
    user.  */
+
+/* This must come before any other includes.  */
+#include "defs.h"
 
 #define WANT_CPU_BPFBF
 #define WANT_CPU bpfbf

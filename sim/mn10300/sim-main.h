@@ -1,7 +1,7 @@
 /*  This file is part of the program psim.
 
     Copyright (C) 1994-1997, Andrew Cagney <cagney@highland.com.au>
-    Copyright (C) 1997-2020 Free Software Foundation, Inc.
+    Copyright (C) 1997-2021 Free Software Foundation, Inc.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -63,17 +63,6 @@ struct _sim_cpu {
   sim_event *pending_nmi;
   sim_cia cia;
   sim_cpu_base base;
-};
-
-
-struct sim_state {
-
-  /* the processors proper */
-  sim_cpu *cpu[MAX_NR_PROCESSORS];
-
-  /* The base class.  */
-  sim_state_base base;
-
 };
 
 /* For compatibility, until all functions converted to passing

@@ -1,5 +1,5 @@
 /* frv simulator support code
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
    Contributed by Red Hat.
 
 This file is part of the GNU simulators.
@@ -17,6 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #define WANT_CPU
 #define WANT_CPU_FRVBF
 
@@ -28,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "bfd.h"
 #include "gdb/sim-frv.h"
 #include <math.h>
+#include <stdlib.h>
 
 /* Maintain a flag in order to know when to write the address of the next
    VLIW instruction into the LR register.  Used by JMPL. JMPIL, and CALL

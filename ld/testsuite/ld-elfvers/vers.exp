@@ -1,5 +1,5 @@
 # Expect script for ld-version tests
-#   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+#   Copyright (C) 1997-2021 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -105,7 +105,7 @@ proc test_ar { test lib object expect } {
     set exec_output [prune_warnings $exec_output]
     if ![string match "" $exec_output] {
 	verbose -log "$exec_output"
-	unresolved "$test"
+	fail "$test"
 	return
     }
 
@@ -489,14 +489,16 @@ proc build_binary { shared pic test source libname other mapfile verexp versymex
     global CC
     global CFLAGS
     global script
+    global NOSANITIZE_CFLAGS
+    global NOLTO_CFLAGS
 
-    if ![ld_compile "$CC -S $pic $CFLAGS" $srcdir/$subdir/$source $tmpdir/$libname.s]     {
-	unresolved "$test"
+    if ![ld_compile "$CC -S $pic $CFLAGS $NOSANITIZE_CFLAGS $NOLTO_CFLAGS" $srcdir/$subdir/$source $tmpdir/$libname.s]     {
+	unsupported "$test"
 	return
     }
 
     if ![ld_assemble $as "$as_options $tmpdir/$libname.s" $tmpdir/$libname.o ]     {
-	unresolved "$test"
+	unsupported "$test"
 	return
     }
 
@@ -587,12 +589,12 @@ proc test_ldfail { test flag source execname other mapfile whyfail } {
     }
 
     if ![ld_compile "$CC -S $flag $CFLAGS" $srcdir/$subdir/$source $tmpdir/$execname.s]     {
-	unresolved "$test"
+	unsupported "$test"
 	return
     }
 
     if ![ld_assemble $as "$as_options $tmpdir/$execname.s" $tmpdir/$execname.o ]     {
-	unresolved "$test"
+	unsupported "$test"
 	return
     }
 
@@ -618,9 +620,10 @@ proc test_asfail { test flag source execname whyfail } {
     global as
     global CC
     global CFLAGS
+    global NOLTO_CFLAGS
 
-    if ![ld_compile "$CC -S $flag $CFLAGS" $srcdir/$subdir/$source $tmpdir/$execname.s]     {
-	unresolved "$test"
+    if ![ld_compile "$CC -S $flag $CFLAGS $NOLTO_CFLAGS" $srcdir/$subdir/$source $tmpdir/$execname.s]     {
+	unsupported "$test"
 	return
     }
 
@@ -687,6 +690,8 @@ proc build_exec { test source execname flags solibname verexp versymexp symexp }
     global objdump
     global CC
     global CFLAGS
+    global NOSANITIZE_CFLAGS
+    global NOLTO_CFLAGS
 
     set shared "--shared --no-undefined-version"
     set script --version-script
@@ -697,13 +702,16 @@ proc build_exec { test source execname flags solibname verexp versymexp symexp }
 	append cc_cmd " -fno-lto"
     }
 
+    # Disable all sanitizers and LTO.
+    append cc_cmd " $NOSANITIZE_CFLAGS $NOLTO_CFLAGS"
+
     if ![ld_compile $cc_cmd $srcdir/$subdir/$source $tmpdir/$execname.s]     {
-	unresolved "$test"
+	unsupported "$test"
 	return
     }
 
     if ![ld_assemble $as "$as_options $tmpdir/$execname.s" $tmpdir/$execname.o ]     {
-	unresolved "$test"
+	unsupported "$test"
 	return
     }
 

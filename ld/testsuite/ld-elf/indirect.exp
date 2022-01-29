@@ -1,5 +1,5 @@
 # Expect script for various indirect symbol tests.
-#   Copyright (C) 2012-2020 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2021 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -64,6 +64,9 @@ if {[check_lto_available]} {
    append cc_cmd " -fno-lto"
 }
 
+# Disable all sanitizers.
+append cc_cmd " $NOSANITIZE_CFLAGS"
+
 if { ![ld_compile $cc_cmd $srcdir/$subdir/indirect1a.c tmpdir/indirect1a.o]
      || ![ld_compile $cc_cmd $srcdir/$subdir/indirect1b.c tmpdir/indirect1b.o]
      || ![ld_compile "$cc_cmd -fPIC" $srcdir/$subdir/indirect2.c tmpdir/indirect2.o]
@@ -77,7 +80,7 @@ if { ![ld_compile $cc_cmd $srcdir/$subdir/indirect1a.c tmpdir/indirect1a.o]
      || ![ld_compile "$cc_cmd -fPIC" $srcdir/$subdir/pr19553c.c tmpdir/pr19553c.o]
      || ![ld_compile "$cc_cmd -fPIC" $srcdir/$subdir/pr19553b.c tmpdir/pr19553b.o]
      || ![ld_compile $cc_cmd $srcdir/$subdir/pr19553a.c tmpdir/pr19553a.o] } {
-    unresolved "Indirect symbol tests"
+    unsupported "Indirect symbol tests"
     return
 }
 

@@ -1,5 +1,5 @@
 /* Support code for various pieces of CGEN simulators.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -17,7 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "bfd.h"
 #include "sim-main.h"
 #include "dis-asm.h"
@@ -28,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #define SEMOPS_DEFINE_INLINE
 #include "cgen-ops.h"
 
-const char * const mode_names[] = {
+const char * const cgen_mode_names[] = {
   "VOID",
   "BI",
   "QI",
@@ -56,22 +58,22 @@ const char * const mode_names[] = {
 static const CGEN_IBASE virtual_insn_entries[] =
 {
   {
-    VIRTUAL_INSN_X_INVALID, "--invalid--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_INVALID, "--invalid--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_BEFORE, "--before--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_BEFORE, "--before--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_AFTER, "--after--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_AFTER, "--after--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_BEGIN, "--begin--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_BEGIN, "--begin--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_CHAIN, "--chain--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_CHAIN, "--chain--", NULL, 0, { V, {} }
   },
   {
-    VIRTUAL_INSN_X_CTI_CHAIN, "--cti-chain--", NULL, 0, { V, { 0 } }
+    VIRTUAL_INSN_X_CTI_CHAIN, "--cti-chain--", NULL, 0, { V, {} }
   }
 };
 
@@ -319,9 +321,7 @@ CONVDISI (val)
 #endif /* DI_FN_SUPPORT */
 
 QI
-RORQI (val, shift)
-     QI  val;
-     int shift;
+RORQI (QI val, int shift)
 {
   if (shift != 0)
     {
@@ -336,9 +336,7 @@ RORQI (val, shift)
 }
 
 QI
-ROLQI (val, shift)
-     QI  val;
-     int shift;
+ROLQI (QI val, int shift)
 {
   if (shift != 0)
     {
@@ -353,9 +351,7 @@ ROLQI (val, shift)
 }
 
 HI
-RORHI (val, shift)
-     HI  val;
-     int shift;
+RORHI (HI val, int shift)
 {
   if (shift != 0)
     {
@@ -370,9 +366,7 @@ RORHI (val, shift)
 }
 
 HI
-ROLHI (val, shift)
-     HI  val;
-     int shift;
+ROLHI (HI val, int shift)
 {
   if (shift != 0)
     {
@@ -387,9 +381,7 @@ ROLHI (val, shift)
 }
 
 SI
-RORSI (val, shift)
-     SI  val;
-     int shift;
+RORSI (SI val, int shift)
 {
   if (shift != 0)
     {
@@ -404,9 +396,7 @@ RORSI (val, shift)
 }
 
 SI
-ROLSI (val, shift)
-     SI  val;
-     int shift;
+ROLSI (SI val, int shift)
 {
   if (shift != 0)
     {
@@ -428,7 +418,7 @@ cgen_rtx_error (SIM_CPU *cpu, const char * msg)
 {
   SIM_DESC sd = CPU_STATE (cpu);
 
-  sim_io_printf (sd, msg);
+  sim_io_printf (sd, "%s", msg);
   sim_io_printf (sd, "\n");
 
   sim_engine_halt (sd, cpu, NULL, CPU_PC_GET (cpu), sim_stopped, SIM_SIGTRAP);

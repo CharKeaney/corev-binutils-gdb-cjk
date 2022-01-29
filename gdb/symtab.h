@@ -1,6 +1,6 @@
 /* Symbol table definitions for GDB.
 
-   Copyright (C) 1986-2020 Free Software Foundation, Inc.
+   Copyright (C) 1986-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -472,7 +472,7 @@ struct general_symbol_info
   void compute_and_set_names (gdb::string_view linkage_name, bool copy_name,
 			      struct objfile_per_bfd_storage *per_bfd,
 			      gdb::optional<hashval_t> hash
-			        = gdb::optional<hashval_t> ());
+				= gdb::optional<hashval_t> ());
 
   /* Name of the symbol.  This is a required field.  Storage for the
      name is allocated on the objfile_obstack for the associated
@@ -539,7 +539,27 @@ struct general_symbol_info
      section_offsets for this objfile.  Negative means that the symbol
      does not get relocated relative to a section.  */
 
-  short section;
+  short m_section;
+
+  /* Set the index into the obj_section list (within the containing
+     objfile) for the section that contains this symbol.  See M_SECTION
+     for more details.  */
+
+  void set_section_index (short idx)
+  { m_section = idx; }
+
+  /* Return the index into the obj_section list (within the containing
+     objfile) for the section that contains this symbol.  See M_SECTION
+     for more details.  */
+
+  short section_index () const
+  { return m_section; }
+
+  /* Return the obj_section from OBJFILE for this symbol.  The symbol
+     returned is based on the SECTION member variable, and can be nullptr
+     if SECTION is negative.  */
+
+  struct obj_section *obj_section (const struct objfile *objfile) const;
 };
 
 extern CORE_ADDR symbol_overlayed_address (CORE_ADDR, struct obj_section *);
@@ -564,11 +584,6 @@ extern CORE_ADDR get_symbol_address (const struct symbol *sym);
 #define SYMBOL_VALUE_COMMON_BLOCK(symbol) (symbol)->value.common_block
 #define SYMBOL_BLOCK_VALUE(symbol)	(symbol)->value.block
 #define SYMBOL_VALUE_CHAIN(symbol)	(symbol)->value.chain
-#define SYMBOL_SECTION(symbol)		(symbol)->section
-#define SYMBOL_OBJ_SECTION(objfile, symbol)			\
-  (((symbol)->section >= 0)				\
-   ? (&(((objfile)->sections)[(symbol)->section]))	\
-   : NULL)
 
 /* Try to determine the demangled name for a symbol, based on the
    language of that symbol.  If the language is set to language_auto,
@@ -753,7 +768,7 @@ extern CORE_ADDR get_msymbol_address (struct objfile *objf,
 #define MSYMBOL_VALUE_ADDRESS(objfile, symbol)				\
   (((symbol)->maybe_copied) ? get_msymbol_address (objfile, symbol)	\
    : ((symbol)->value.address						\
-      + (objfile)->section_offsets[(symbol)->section]))
+      + (objfile)->section_offsets[(symbol)->section_index ()]))
 /* For a bound minsym, we can easily compute the address directly.  */
 #define BMSYMBOL_VALUE_ADDRESS(symbol) \
   MSYMBOL_VALUE_ADDRESS ((symbol).objfile, (symbol).minsym)
@@ -762,11 +777,6 @@ extern CORE_ADDR get_msymbol_address (struct objfile *objf,
 #define MSYMBOL_VALUE_BYTES(symbol)	(symbol)->value.bytes
 #define MSYMBOL_BLOCK_VALUE(symbol)	(symbol)->value.block
 #define MSYMBOL_VALUE_CHAIN(symbol)	(symbol)->value.chain
-#define MSYMBOL_SECTION(symbol)		(symbol)->section
-#define MSYMBOL_OBJ_SECTION(objfile, symbol)			\
-  (((symbol)->section >= 0)				\
-   ? (&(((objfile)->sections)[(symbol)->section]))	\
-   : NULL)
 
 #include "minsyms.h"
 
@@ -1022,7 +1032,7 @@ struct symbol_computed_ops
 
   void (*generate_c_location) (struct symbol *symbol, string_file *stream,
 			       struct gdbarch *gdbarch,
-			       unsigned char *registers_used,
+			       std::vector<bool> &registers_used,
 			       CORE_ADDR pc, const char *result_name);
 
 };
@@ -1114,15 +1124,15 @@ struct symbol : public general_symbol_info, public allocate_on_obstack
       subclass (SYMBOL_NONE)
     {
       /* We can't use an initializer list for members of a base class, and
-         general_symbol_info needs to stay a POD type.  */
+	 general_symbol_info needs to stay a POD type.  */
       m_name = nullptr;
       value.ivalue = 0;
       language_specific.obstack = nullptr;
       m_language = language_unknown;
       ada_mangled = 0;
-      section = -1;
+      m_section = -1;
       /* GCC 4.8.5 (on CentOS 7) does not correctly compile class-
-         initialization of unions, so we initialize it manually here.  */
+	 initialization of unions, so we initialize it manually here.  */
       owner.symtab = nullptr;
     }
 
@@ -1414,18 +1424,18 @@ struct symtab
    This is recorded as:
 
    objfile -> foo.c(cu) -> bar.c(cu) -> NULL
-                |            |
-                v            v
-              foo.c        bar.c
-                |            |
-                v            v
-              foo1.h       foo1.h
-                |            |
-                v            v
-              foo2.h       bar.h
-                |            |
-                v            v
-               NULL         NULL
+		|            |
+		v            v
+	      foo.c        bar.c
+		|            |
+		v            v
+	      foo1.h       foo1.h
+		|            |
+		v            v
+	      foo2.h       bar.h
+		|            |
+		v            v
+	       NULL         NULL
 
    where "foo.c(cu)" and "bar.c(cu)" are struct compunit_symtab objects,
    and the files foo.c, etc. are struct symtab objects.  */
@@ -2126,7 +2136,7 @@ public:
 private:
   /* The kind of symbols are we searching for.
      VARIABLES_DOMAIN - Search all symbols, excluding functions, type
-                        names, and constants (enums).
+			names, and constants (enums).
      FUNCTIONS_DOMAIN - Search all functions..
      TYPES_DOMAIN     - Search all type names.
      MODULES_DOMAIN   - Search all Fortran modules.

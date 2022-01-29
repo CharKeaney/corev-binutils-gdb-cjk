@@ -1,6 +1,6 @@
 /* Target-dependent code for FreeBSD, architecture-independent.
 
-   Copyright (C) 2002-2020 Free Software Foundation, Inc.
+   Copyright (C) 2002-2021 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -32,6 +32,7 @@
 
 #include "elf-bfd.h"
 #include "fbsd-tdep.h"
+#include "gcore-elf.h"
 
 /* This enum is derived from FreeBSD's <sys/signal.h>.  */
 
@@ -583,107 +584,6 @@ find_signalled_thread (struct thread_info *info, void *data)
   return 0;
 }
 
-/* Structure for passing information from
-   fbsd_collect_thread_registers via an iterator to
-   fbsd_collect_regset_section_cb. */
-
-struct fbsd_collect_regset_section_cb_data
-{
-  const struct regcache *regcache;
-  bfd *obfd;
-  char *note_data;
-  int *note_size;
-  unsigned long lwp;
-  enum gdb_signal stop_signal;
-  int abort_iteration;
-};
-
-static void
-fbsd_collect_regset_section_cb (const char *sect_name, int supply_size,
-				int collect_size, const struct regset *regset,
-				const char *human_name, void *cb_data)
-{
-  char *buf;
-  struct fbsd_collect_regset_section_cb_data *data
-    = (struct fbsd_collect_regset_section_cb_data *) cb_data;
-
-  if (data->abort_iteration)
-    return;
-
-  gdb_assert (regset->collect_regset);
-
-  buf = (char *) xmalloc (collect_size);
-  regset->collect_regset (regset, data->regcache, -1, buf, collect_size);
-
-  /* PRSTATUS still needs to be treated specially.  */
-  if (strcmp (sect_name, ".reg") == 0)
-    data->note_data = (char *) elfcore_write_prstatus
-      (data->obfd, data->note_data, data->note_size, data->lwp,
-       gdb_signal_to_host (data->stop_signal), buf);
-  else
-    data->note_data = (char *) elfcore_write_register_note
-      (data->obfd, data->note_data, data->note_size,
-       sect_name, buf, collect_size);
-  xfree (buf);
-
-  if (data->note_data == NULL)
-    data->abort_iteration = 1;
-}
-
-/* Records the thread's register state for the corefile note
-   section.  */
-
-static char *
-fbsd_collect_thread_registers (const struct regcache *regcache,
-			       ptid_t ptid, bfd *obfd,
-			       char *note_data, int *note_size,
-			       enum gdb_signal stop_signal)
-{
-  struct gdbarch *gdbarch = regcache->arch ();
-  struct fbsd_collect_regset_section_cb_data data;
-
-  data.regcache = regcache;
-  data.obfd = obfd;
-  data.note_data = note_data;
-  data.note_size = note_size;
-  data.stop_signal = stop_signal;
-  data.abort_iteration = 0;
-  data.lwp = ptid.lwp ();
-
-  gdbarch_iterate_over_regset_sections (gdbarch,
-					fbsd_collect_regset_section_cb,
-					&data, regcache);
-  return data.note_data;
-}
-
-struct fbsd_corefile_thread_data
-{
-  struct gdbarch *gdbarch;
-  bfd *obfd;
-  char *note_data;
-  int *note_size;
-  enum gdb_signal stop_signal;
-};
-
-/* Records the thread's register state for the corefile note
-   section.  */
-
-static void
-fbsd_corefile_thread (struct thread_info *info,
-		      struct fbsd_corefile_thread_data *args)
-{
-  struct regcache *regcache;
-
-  regcache = get_thread_arch_regcache (info->inf->process_target (),
-				       info->ptid, args->gdbarch);
-
-  target_fetch_registers (regcache, -1);
-
-  args->note_data = fbsd_collect_thread_registers
-    (regcache, info->ptid, args->obfd, args->note_data,
-     args->note_size, args->stop_signal);
-}
-
 /* Return a byte_vector containing the contents of a core dump note
    for the target object of type OBJECT.  If STRUCTSIZE is non-zero,
    the data is prefixed with a 32-bit integer size to match the format
@@ -693,7 +593,7 @@ static gdb::optional<gdb::byte_vector>
 fbsd_make_note_desc (enum target_object object, uint32_t structsize)
 {
   gdb::optional<gdb::byte_vector> buf =
-    target_read_alloc (current_top_target (), object, NULL);
+    target_read_alloc (current_inferior ()->top_target (), object, NULL);
   if (!buf || buf->empty ())
     return {};
 
@@ -709,11 +609,10 @@ fbsd_make_note_desc (enum target_object object, uint32_t structsize)
 /* Create appropriate note sections for a corefile, returning them in
    allocated memory.  */
 
-static char *
+static gdb::unique_xmalloc_ptr<char>
 fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
 {
-  struct fbsd_corefile_thread_data thread_args;
-  char *note_data = NULL;
+  gdb::unique_xmalloc_ptr<char> note_data;
   Elf_Internal_Ehdr *i_ehdrp;
   struct thread_info *curr_thr, *signalled_thr;
 
@@ -732,8 +631,9 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
       if (infargs != NULL)
 	psargs = psargs + " " + infargs;
 
-      note_data = elfcore_write_prpsinfo (obfd, note_data, note_size,
-					  fname, psargs.c_str ());
+      note_data.reset (elfcore_write_prpsinfo (obfd, note_data.release (),
+					       note_size, fname,
+					       psargs.c_str ()));
     }
 
   /* Thread register information.  */
@@ -760,22 +660,17 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
 	signalled_thr = curr_thr;
     }
 
-  thread_args.gdbarch = gdbarch;
-  thread_args.obfd = obfd;
-  thread_args.note_data = note_data;
-  thread_args.note_size = note_size;
-  thread_args.stop_signal = signalled_thr->suspend.stop_signal;
-
-  fbsd_corefile_thread (signalled_thr, &thread_args);
+  enum gdb_signal stop_signal = signalled_thr->suspend.stop_signal;
+  gcore_elf_build_thread_register_notes (gdbarch, signalled_thr, stop_signal,
+					 obfd, &note_data, note_size);
   for (thread_info *thr : current_inferior ()->non_exited_threads ())
     {
       if (thr == signalled_thr)
 	continue;
 
-      fbsd_corefile_thread (thr, &thread_args);
+      gcore_elf_build_thread_register_notes (gdbarch, thr, stop_signal,
+					     obfd, &note_data, note_size);
     }
-
-  note_data = thread_args.note_data;
 
   /* Auxiliary vector.  */
   uint32_t structsize = gdbarch_ptr_bit (gdbarch) / 4; /* Elf_Auxinfo  */
@@ -783,9 +678,11 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
     fbsd_make_note_desc (TARGET_OBJECT_AUXV, structsize);
   if (note_desc && !note_desc->empty ())
     {
-      note_data = elfcore_write_note (obfd, note_data, note_size, "FreeBSD",
-				      NT_FREEBSD_PROCSTAT_AUXV,
-				      note_desc->data (), note_desc->size ());
+      note_data.reset (elfcore_write_note (obfd, note_data.release (),
+					   note_size, "FreeBSD",
+					   NT_FREEBSD_PROCSTAT_AUXV,
+					   note_desc->data (),
+					   note_desc->size ()));
       if (!note_data)
 	return NULL;
     }
@@ -794,9 +691,11 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
   note_desc = fbsd_make_note_desc (TARGET_OBJECT_FREEBSD_VMMAP, 0);
   if (note_desc && !note_desc->empty ())
     {
-      note_data = elfcore_write_note (obfd, note_data, note_size, "FreeBSD",
-				      NT_FREEBSD_PROCSTAT_VMMAP,
-				      note_desc->data (), note_desc->size ());
+      note_data.reset (elfcore_write_note (obfd, note_data.release (),
+					   note_size, "FreeBSD",
+					   NT_FREEBSD_PROCSTAT_VMMAP,
+					   note_desc->data (),
+					   note_desc->size ()));
       if (!note_data)
 	return NULL;
     }
@@ -804,12 +703,17 @@ fbsd_make_corefile_notes (struct gdbarch *gdbarch, bfd *obfd, int *note_size)
   note_desc = fbsd_make_note_desc (TARGET_OBJECT_FREEBSD_PS_STRINGS, 0);
   if (note_desc && !note_desc->empty ())
     {
-      note_data = elfcore_write_note (obfd, note_data, note_size, "FreeBSD",
-				      NT_FREEBSD_PROCSTAT_PSSTRINGS,
-				      note_desc->data (), note_desc->size ());
+      note_data.reset (elfcore_write_note (obfd, note_data.release (),
+					   note_size, "FreeBSD",
+					   NT_FREEBSD_PROCSTAT_PSSTRINGS,
+					   note_desc->data (),
+					   note_desc->size ()));
       if (!note_data)
 	return NULL;
     }
+
+  /* Include the target description when possible.  */
+  gcore_elf_make_tdesc_note (obfd, &note_data, note_size);
 
   return note_data;
 }
@@ -1643,14 +1547,14 @@ fbsd_get_siginfo_type (struct gdbarch *gdbarch)
   pid_type = arch_type (gdbarch, TYPE_CODE_TYPEDEF,
 			TYPE_LENGTH (int32_type) * TARGET_CHAR_BIT, "__pid_t");
   TYPE_TARGET_TYPE (pid_type) = int32_type;
-  TYPE_TARGET_STUB (pid_type) = 1;
+  pid_type->set_target_is_stub (true);
 
   /* __uid_t */
   uid_type = arch_type (gdbarch, TYPE_CODE_TYPEDEF,
 			TYPE_LENGTH (uint32_type) * TARGET_CHAR_BIT,
 			"__uid_t");
   TYPE_TARGET_TYPE (uid_type) = uint32_type;
-  TYPE_TARGET_STUB (uid_type) = 1;
+  pid_type->set_target_is_stub (true);
 
   /* _reason */
   reason_type = arch_composite_type (gdbarch, NULL, TYPE_CODE_UNION);
@@ -1826,7 +1730,7 @@ fbsd_gdb_signal_from_target (struct gdbarch *gdbarch, int signal)
 
 static int
 fbsd_gdb_signal_to_target (struct gdbarch *gdbarch,
-                enum gdb_signal signal)
+		enum gdb_signal signal)
 {
   switch (signal)
     {

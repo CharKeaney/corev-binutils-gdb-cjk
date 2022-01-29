@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(Makefile.in)
-sinclude(../common/acinclude.m4)
+AC_CONFIG_MACRO_DIRS([../.. ../../config])
 
 AC_PROG_INSTALL
 AC_PROG_CC
@@ -587,6 +587,28 @@ AC_DEFINE_UNQUOTED([WITH_TRACE], [$sim_trace], [Sim trace settings])
 AC_MSG_RESULT($sim_trace)
 
 
+AC_ARG_ENABLE(werror,
+  AS_HELP_STRING([--enable-werror], [treat compile warnings as errors]),
+  [case "${enableval}" in
+     yes | y) ERROR_ON_WARNING="yes" ;;
+     no | n)  ERROR_ON_WARNING="no" ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-werror) ;;
+   esac])
+# Enable -Werror by default when using gcc
+if test "${GCC}" = yes -a -z "${ERROR_ON_WARNING}" ; then
+  ERROR_ON_WARNING=yes
+fi
+WERROR_CFLAGS=""
+if test "${ERROR_ON_WARNING}" = yes ; then
+  WERROR_CFLAGS="-Werror"
+fi
+dnl Enable -Wno-format by default when using gcc on mingw since many
+dnl GCC versions complain about %I64.
+case "${host}" in
+  *-*-mingw32*) WERROR_CFLAGS="$WERROR_CFLAGS -Wno-format" ;;
+esac
+AC_SUBST(WERROR_CFLAGS)
+
 AC_ARG_ENABLE(sim-warnings,
 [  --enable-sim-warnings=opts		Extra CFLAGS for turning on compiler warnings except for idecode.o, semantics.o and psim.o],
 [case "${enableval}" in
@@ -612,7 +634,7 @@ fi],[sim_xor_endian=""])dnl
 
 
 ACX_PKGVERSION([GDB])
-ACX_BUGURL([http://www.gnu.org/software/gdb/bugs/])
+ACX_BUGURL([https://www.gnu.org/software/gdb/bugs/])
 AC_DEFINE_UNQUOTED([PKGVERSION], ["$PKGVERSION"], [Additional package description])
 AC_DEFINE_UNQUOTED([REPORT_BUGS_TO], ["$REPORT_BUGS_TO"], [Bug reporting address])
 
@@ -625,8 +647,6 @@ AM_ZLIB
 
 # BFD uses libdl when when plugins enabled.
 AC_PLUGINS
-
-. ${srcdir}/../../bfd/configure.host
 
 case ${host} in
   *mingw32*)
@@ -655,7 +675,7 @@ AC_TYPE_UID_T
 
 AC_CHECK_FUNCS(access cfgetispeed cfgetospeed cfsetispeed cfsetospeed chdir chmod chown dup dup2 fchmod fchown fcntl fstat fstatfs getdirentries getegid geteuid getgid getpid getppid getrusage gettimeofday getuid ioctl kill link lseek lstat mkdir pipe readlink rmdir setreuid setregid stat sigprocmask stat symlink tcgetattr tcsetattr tcsendbreak tcdrain tcflush tcflow tcgetpgrp tcsetpgrp time umask unlink)
 
-AC_CHECK_HEADERS(fcntl.h stdlib.h string.h strings.h sys/ioctl.h sys/mount.h sys/param.h sys/resource.h sys/stat.h sys/termio.h sys/termios.h sys/time.h sys/times.h sys/types.h time.h unistd.h sys/vfs.h sys/statfs.h)
+AC_CHECK_HEADERS(fcntl.h sys/ioctl.h sys/mount.h sys/param.h sys/resource.h sys/stat.h sys/termio.h sys/termios.h sys/time.h sys/times.h sys/types.h unistd.h sys/vfs.h sys/statfs.h)
 AC_HEADER_DIRENT
 
 dnl Figure out what type of termio/termios support there is
@@ -835,7 +855,6 @@ AC_EXEEXT
 AC_SUBST(CC_FOR_BUILD)
 AC_SUBST(CFLAGS_FOR_BUILD)
 AC_SUBST(CFLAGS)
-AC_SUBST(HDEFINES)
 AR=${AR-ar}
 AC_SUBST(AR)
 AC_PROG_RANLIB

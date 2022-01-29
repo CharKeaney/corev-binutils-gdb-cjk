@@ -1,5 +1,5 @@
 /* Default profiling support.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -17,22 +17,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "sim-main.h"
 #include "sim-io.h"
 #include "sim-options.h"
 #include "sim-assert.h"
 
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 #include <ctype.h>
 
 #if !WITH_PROFILE_PC_P
@@ -463,7 +457,7 @@ profile_option_handler (SIM_DESC sd,
 
 /* Profiling output hooks.  */
 
-static void
+static void ATTRIBUTE_PRINTF (3, 0)
 profile_vprintf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, va_list ap)
 {
   FILE *fp = PROFILE_FILE (CPU_PROFILE_DATA (cpu));
@@ -475,7 +469,7 @@ profile_vprintf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, va_list ap)
     sim_io_evprintf (sd, fmt, ap);
 }
 
-__attribute__ ((format (printf, 3, 4)))
+ATTRIBUTE_PRINTF (3, 4)
 static void
 profile_printf (SIM_DESC sd, sim_cpu *cpu, const char *fmt, ...)
 {
@@ -563,7 +557,7 @@ profile_pc_init (SIM_DESC sd)
 		    {
 		      /* nr_buckets = (full-address-range / 2) / (bucket_size / 2) */
 		      PROFILE_PC_NR_BUCKETS (data) =
-			((1 << sizeof (sim_cia) * (8 - 1))
+			((1ULL << sizeof (sim_cia) * (8 - 1))
 			 / (PROFILE_PC_BUCKET_SIZE (data) / 2));
 		    }
 		  else
@@ -582,7 +576,7 @@ profile_pc_init (SIM_DESC sd)
 	    {
 	      if (PROFILE_PC_END (data) == 0)
 		/* bucket_size = (full-address-range / 2) / (nr_buckets / 2) */
-		bucket_size = ((1 << ((sizeof (sim_cia) * 8) - 1))
+		bucket_size = ((1ULL << ((sizeof (sim_cia) * 8) - 1))
 			       / (PROFILE_PC_NR_BUCKETS (data) / 2));
 	      else
 		bucket_size = ((PROFILE_PC_END (data)

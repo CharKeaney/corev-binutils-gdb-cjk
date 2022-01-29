@@ -1,5 +1,5 @@
 /* Miscellaneous simulator utilities.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -68,7 +68,8 @@ struct bfd *sim_load_file (SIM_DESC sd, const char *myname,
 			   int lma_p, sim_write_fn do_load);
 
 /* Internal version of sim_do_command, include formatting */
-void sim_do_commandf (SIM_DESC sd, const char *fmt, ...);
+void sim_do_commandf (SIM_DESC sd, const char *fmt, ...)
+    ATTRIBUTE_PRINTF (2, 3);
 
 
 /* These are defined in callback.c as cover functions to the vprintf

@@ -1,5 +1,5 @@
 /* frv trap support
-   Copyright (C) 1999-2020 Free Software Foundation, Inc.
+   Copyright (C) 1999-2021 Free Software Foundation, Inc.
    Contributed by Red Hat.
 
 This file is part of the GNU simulators.
@@ -17,6 +17,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #define WANT_CPU frvbf
 #define WANT_CPU_FRVBF
 
@@ -28,6 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "bfd.h"
 #include "libiberty.h"
+
+#include <stdlib.h>
 
 CGEN_ATTR_VALUE_ENUM_TYPE frv_current_fm_slot;
 
@@ -270,7 +275,8 @@ frv_mtrap (SIM_CPU *current_cpu)
 
   /* Check the status of media exceptions in MSR0.  */
   SI msr = GET_MSR (0);
-  if (GET_MSR_AOVF (msr) || GET_MSR_MTT (msr) && STATE_ARCHITECTURE (sd)->mach != bfd_mach_fr550)
+  if (GET_MSR_AOVF (msr)
+      || (GET_MSR_MTT (msr) && STATE_ARCHITECTURE (sd)->mach != bfd_mach_fr550))
     frv_queue_program_interrupt (current_cpu, FRV_MP_EXCEPTION);
 }
 
@@ -740,7 +746,7 @@ frvbf_check_acc_range (SIM_CPU *current_cpu, SI regno)
   /* Only applicable to fr550 */
   SIM_DESC sd = CPU_STATE (current_cpu);
   if (STATE_ARCHITECTURE (sd)->mach != bfd_mach_fr550)
-    return;
+    return 0;
 
   /* On the fr550, media insns in slots 0 and 2 can only access
      accumulators acc0-acc3. Insns in slots 1 and 3 can only access
@@ -917,8 +923,8 @@ frvbf_commit (SIM_CPU *current_cpu, SI target_index, BI is_float)
     NE_flag = GET_NE_FLAG (NE_flags, target_index);
   else
     {
-      NE_flag =
-	hi_available && NE_flags[0] != 0 || lo_available && NE_flags[1] != 0;
+      NE_flag = (hi_available && NE_flags[0] != 0)
+		|| (lo_available && NE_flags[1] != 0);
     }
 
   /* Always clear the appropriate NE flags.  */

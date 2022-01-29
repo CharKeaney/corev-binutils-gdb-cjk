@@ -1,5 +1,5 @@
 /* Tracing support for CGEN-based simulators.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -17,8 +17,11 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include <errno.h>
+#include <stdlib.h>
 #include "dis-asm.h"
 #include "bfd.h"
 #include "sim-main.h"
@@ -168,7 +171,7 @@ cgen_trace_insn (SIM_CPU *cpu, const struct cgen_insn *opcode,
   if (CGEN_INSN_VIRTUAL_P (opcode))
     {
       trace_prefix (CPU_STATE (cpu), cpu, NULL_CIA, pc, 0,
-		    NULL, 0, CGEN_INSN_NAME (opcode));
+		    NULL, 0, "%s", CGEN_INSN_NAME (opcode));
       return;
     }
 
@@ -339,8 +342,8 @@ sim_disasm_perror_memory (int status, bfd_vma memaddr,
     /* Actually, address between memaddr and memaddr + len was
        out of bounds.  */
     info->fprintf_func (info->stream,
-			"Address 0x%x is out of bounds.",
-			(int) memaddr);
+			"Address 0x%" BFD_VMA_FMT "x is out of bounds.",
+			memaddr);
 }
 
 /* Disassemble using the CGEN opcode table.
@@ -383,7 +386,7 @@ sim_cgen_disassemble_insn (SIM_CPU *cpu, const CGEN_INSN *insn,
 
   if (length != insn_length)
   {
-    sim_io_error (sd, "unable to read address %x", pc);
+    sim_io_error (sd, "unable to read address %" PRIxTA, pc);
   }
 
   /* If the entire insn will fit into an integer, then do it. Otherwise, just

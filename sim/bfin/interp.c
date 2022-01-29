@@ -1,6 +1,6 @@
 /* Simulator for Analog Devices Blackfin processors.
 
-   Copyright (C) 2005-2020 Free Software Foundation, Inc.
+   Copyright (C) 2005-2021 Free Software Foundation, Inc.
    Contributed by Analog Devices, Inc.
 
    This file is part of simulators.
@@ -18,7 +18,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#include "gdb/callback.h"
+#include "sim/callback.h"
 #include "gdb/signals.h"
 #include "sim-main.h"
 #include "sim-syscall.h"
@@ -289,7 +290,7 @@ bfin_syscall (SIM_CPU *cpu)
 	sc.result = heap;
 	heap += sc.arg2;
 	/* Keep it page aligned.  */
-	heap = ALIGN (heap, 4096);
+	heap = align_up (heap, 4096);
 
 	break;
       }
@@ -457,10 +458,6 @@ bfin_syscall (SIM_CPU *cpu)
       sc.result = setgid (sc.arg1);
       goto sys_finish;
 
-    case CB_SYS_getpid:
-      tbuf += sprintf (tbuf, "getpid()");
-      sc.result = getpid ();
-      goto sys_finish;
     case CB_SYS_kill:
       tbuf += sprintf (tbuf, "kill(%u, %i)", args[0], args[1]);
       /* Only let the app kill itself.  */
@@ -720,21 +717,15 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
 {
   char c;
   int i;
-  SIM_DESC sd = sim_state_alloc (kind, callback);
+  SIM_DESC sd = sim_state_alloc_extra (kind, callback,
+				       sizeof (struct bfin_board_data));
 
   /* The cpu data is kept in a separately allocated chunk of memory.  */
-  if (sim_cpu_alloc_all (sd, 1, /*cgen_cpu_max_extra_bytes ()*/0) != SIM_RC_OK)
+  if (sim_cpu_alloc_all (sd, 1) != SIM_RC_OK)
     {
       free_state (sd);
       return 0;
     }
-
-  {
-    /* XXX: Only first core gets profiled ?  */
-    SIM_CPU *cpu = STATE_CPU (sd, 0);
-    STATE_WATCHPOINTS (sd)->pc = &PCREG;
-    STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PCREG);
-  }
 
   if (sim_pre_argv_init (sd, argv[0]) != SIM_RC_OK)
     {
@@ -745,17 +736,6 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   /* XXX: Default to the Virtual environment.  */
   if (STATE_ENVIRONMENT (sd) == ALL_ENVIRONMENT)
     STATE_ENVIRONMENT (sd) = VIRTUAL_ENVIRONMENT;
-
-  /* These options override any module options.
-     Obviously ambiguity should be avoided, however the caller may wish to
-     augment the meaning of an option.  */
-#define e_sim_add_option_table(sd, options) \
-  do { \
-    extern const OPTION options[]; \
-    sim_add_option_table (sd, NULL, options); \
-  } while (0)
-  e_sim_add_option_table (sd, bfin_mmu_options);
-  e_sim_add_option_table (sd, bfin_mach_options);
 
   /* The parser will print an error message for us, so we silently return.  */
   if (sim_parse_args (sd, argv) != SIM_RC_OK)
@@ -769,7 +749,7 @@ sim_open (SIM_OPEN_KIND kind, host_callback *callback,
   if (sim_core_read_buffer (sd, NULL, read_map, &c, 4, 1) == 0)
     {
       bu16 emuexcpt = 0x25;
-      sim_do_commandf (sd, "memory-size 0x%lx", BFIN_DEFAULT_MEM_SIZE);
+      sim_do_commandf (sd, "memory-size 0x%x", BFIN_DEFAULT_MEM_SIZE);
       sim_write (sd, 0, (void *)&emuexcpt, 2);
     }
 
@@ -948,7 +928,8 @@ bfin_fdpic_load (SIM_DESC sd, SIM_CPU *cpu, struct bfd *abfd, bu32 *sp,
       }
 
   /* Update the load offset with a few extra pages.  */
-  fdpic_load_offset = ALIGN (max (max_load_addr, fdpic_load_offset), 0x10000);
+  fdpic_load_offset = align_up (max (max_load_addr, fdpic_load_offset),
+				0x10000);
   fdpic_load_offset += 0x10000;
 
   /* Push the summary loadmap info onto the stack last.  */
@@ -1074,7 +1055,7 @@ bfin_user_init (SIM_DESC sd, SIM_CPU *cpu, struct bfd *abfd,
     env_flat += strlen (env[i]);
 
   /* Push the Auxiliary Vector Table between argv/env and actual strings.  */
-  sp_flat = sp = ALIGN (SPREG - argv_flat - env_flat - 4, 4);
+  sp_flat = sp = align_up (SPREG - argv_flat - env_flat - 4, 4);
   if (auxvt)
     {
 # define AT_PUSH(at, val) \

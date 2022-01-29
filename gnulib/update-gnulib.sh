@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (C) 2011-2020 Free Software Foundation, Inc.
+# Copyright (C) 2011-2021 Free Software Foundation, Inc.
 #
 # This file is part of GDB.
 #
@@ -36,9 +36,14 @@ IMPORTED_GNULIB_MODULES="\
     dirent \
     dirfd \
     errno \
+    ffs \
     fnmatch-gnu \
     frexpl \
+    gendocs \
     getcwd \
+    getline \
+    gettimeofday \
+    gitlog-to-changelog \
     glob \
     inet_ntop
     inttypes \
@@ -69,7 +74,7 @@ IMPORTED_GNULIB_MODULES="\
 "
 
 # The gnulib commit ID to use for the update.
-GNULIB_COMMIT_SHA1="e22cd2677a4b7beacbf30b93bb0559f7b89f96ce"
+GNULIB_COMMIT_SHA1="776af40e09b476a41073131a90022572f448c189"
 
 # The expected version number for the various auto tools we will
 # use after the import.
@@ -171,6 +176,8 @@ apply_patches ()
         exit 1
     fi
 }
+
+apply_patches "patches/0001-use-windows-stat"
 
 # Regenerate all necessary files...
 aclocal &&

@@ -73,7 +73,7 @@ possible to check just a specific test:
 One can also decide to call the Makefile rules by hand inside the
 gdb/testsuite directory, e.g.:
 
-	make check-paralell-racy -j4
+	make check-parallel-racy -j4
 
 In which case the value of the DEFAULT_RACY_ITER variable (inside
 gdb/testsuite/Makefile.in) will be used to determine how many
@@ -526,6 +526,11 @@ gdb,pie_ldflag
 gdb,nopie_flag
 
   The flag required to force the compiler to produce non-position-independent
+  executables.
+
+gdb,nopie_ldflag
+
+  The flag required to force the linker to produce non-position-independent
   executables.
 
 gdb,debug

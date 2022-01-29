@@ -1,12 +1,12 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT(Makefile.in)
-sinclude(../common/acinclude.m4)
+AC_CONFIG_MACRO_DIRS([../m4 ../.. ../../config])
 
 SIM_AC_COMMON
 
 dnl Options available in this module
 SIM_AC_OPTION_ALIGNMENT(NONSTRICT_ALIGNMENT)
-SIM_AC_OPTION_WARNINGS
+SIM_AC_OPTION_WARNINGS(no)
 SIM_AC_OPTION_RESERVED_BITS(1)
 
 # DEPRECATED
@@ -221,7 +221,7 @@ if test ${sim_gen} = MULTI; then
 
   cat << __EOF__ > multi-run.c
 /* Main entry point for MULTI simulators.
-   Copyright (C) 2003-2020 Free Software Foundation, Inc.
+   Copyright (C) 2003-2021 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -426,29 +426,10 @@ AC_SUBST(sim_multi_obj)
 #
 # Add simulated hardware devices
 #
-hw_enabled=no
-case "${target}" in
-  mips*tx39*)
-	hw_enabled=yes
-	hw_extra_devices="tx3904cpu tx3904irc tx3904tmr tx3904sio" 
-	;;
-  *)
-	;;
-esac
-SIM_AC_OPTION_HARDWARE($hw_enabled,$hw_devices,$hw_extra_devices)
-
-
-# Choose simulator engine
-case "${target}" in
-  *)    mips_igen_engine="engine.o"
-	;;
-esac
-AC_SUBST(mips_igen_engine)
+SIM_AC_OPTION_HARDWARE(tx3904cpu tx3904irc tx3904tmr tx3904sio)
 
 
 AC_PATH_X
-mips_extra_libs=""
-AC_SUBST(mips_extra_libs)
 
 AC_CHECK_LIB(m, fabs)
 AC_CHECK_FUNCS(aint anint sqrt)

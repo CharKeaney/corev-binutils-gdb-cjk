@@ -1,5 +1,5 @@
 /* General Cpu tools GENerated simulator support.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Support.
 
 This file is part of GDB, the GNU debugger.
@@ -146,7 +146,7 @@ typedef enum {
 typedef struct cgen_state {
   /* Non-zero if no tracing or profiling is selected.  */
   int run_fast_p;
-#define STATE_RUN_FAST_P(sd) ((sd) -> cgen_state.run_fast_p)
+#define STATE_RUN_FAST_P(sd) (STATE_CGEN_STATE (sd).run_fast_p)
 } CGEN_STATE;
 
 /* Various utilities.  */

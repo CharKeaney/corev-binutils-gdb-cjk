@@ -1,5 +1,5 @@
 /* Profiling definitions for the FRV simulator
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
    Contributed by Red Hat.
 
 This file is part of the GNU Simulators.
@@ -224,5 +224,7 @@ frv_model_trace_wait_cycles (SIM_CPU *, int, const char *);
 #define REGTYPE_NONE 0
 #define REGTYPE_FR   1
 #define REGTYPE_ACC  2
+
+SI frv_ref_SI (SI);
 
 #endif /* PROFILE_H */

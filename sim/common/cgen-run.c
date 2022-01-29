@@ -1,5 +1,5 @@
 /* Main simulator loop for CGEN-based simulators.
-   Copyright (C) 1998-2020 Free Software Foundation, Inc.
+   Copyright (C) 1998-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of GDB, the GNU debugger.
@@ -32,6 +32,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
    ??? Supporting full/fast can be more modular, blah blah blah.
    When the framework is more modular, this can be.
 */
+
+/* This must come before any other includes.  */
+#include "defs.h"
 
 #include "sim-main.h"
 #include "sim-assert.h"

@@ -1,5 +1,5 @@
 /* Semantics ops support for CGEN-based simulators.
-   Copyright (C) 1996-2020 Free Software Foundation, Inc.
+   Copyright (C) 1996-2021 Free Software Foundation, Inc.
    Contributed by Cygnus Solutions.
 
 This file is part of the GNU Simulators.
@@ -707,5 +707,7 @@ BI SUBCFDI (DI a, DI b, BI c);
 BI SUBOFDI (DI a, DI b, BI c);
 
 #endif
+
+extern void cgen_rtx_error (SIM_CPU *, const char *);
 
 #endif /* CGEN_SEM_OPS_H */

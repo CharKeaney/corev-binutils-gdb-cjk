@@ -1,8 +1,15 @@
 /* RISC-V ELF support for BFD.
-   Copyright (C) 2011-2020 Free Software Foundation, Inc.
+   Copyright (C) 2011-2021 Free Software Foundation, Inc.
 
    Contributed by Andrew Waterman (andrew@sifive.com).
    Based on MIPS ELF support for BFD, by Ian Lance Taylor.
+
+   Modified for CORE-V by:
+   Mary Bennett (mary.bennett@embecosm.com)
+   Pietra Ferreira (pietra.ferreira@embecosm.com)
+   Jessica Mills (jessica.mills@embecosm.com)
+
+   Some of these changes are (C) Open Hardware Group, pending FSF assignment.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -88,6 +95,10 @@ START_RELOC_NUMBERS (elf_riscv_reloc_type)
   RELOC_NUMBER (R_RISCV_SET16, 55)
   RELOC_NUMBER (R_RISCV_SET32, 56)
   RELOC_NUMBER (R_RISCV_32_PCREL, 57)
+  RELOC_NUMBER (R_RISCV_IRELATIVE, 58)
+  /* CORE-V Specific Relocations.  */
+  RELOC_NUMBER (R_RISCV_CVPCREL_UI12, 224)
+  RELOC_NUMBER (R_RISCV_CVPCREL_URS1, 225)
 END_RELOC_NUMBERS (R_RISCV_max)
 
 /* Processor specific flags for the ELF header e_flags field.  */
@@ -117,10 +128,9 @@ END_RELOC_NUMBERS (R_RISCV_max)
 #define RISCV_GP_SYMBOL "__global_pointer$"
 
 /* Additional section types.  */
-#define SHT_RISCV_ATTRIBUTES   0x70000003  /* Section holds attributes.  */
+#define SHT_RISCV_ATTRIBUTES 0x70000003 /* Section holds attributes.  */
 
 /* Object attributes.  */
-
 enum
 {
   /* 0-3 are generic.  */

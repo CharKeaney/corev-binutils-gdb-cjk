@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-# Copyright (C) 2002-2020 Free Software Foundation, Inc.
+# Copyright (C) 2002-2021 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -32,10 +32,12 @@ fragment <<EOF
 
 static asection *ppc_add_stub_section (const char *, asection *);
 static void ppc_layout_sections_again (void);
+static void ppc_edit (void);
 
 static struct ppc64_elf_params params = { NULL,
 					  &ppc_add_stub_section,
 					  &ppc_layout_sections_again,
+					  &ppc_edit,
 					  1, -1, -1, 0,
 					  ${DEFAULT_PLT_STATIC_CHAIN-0}, -1, 5,
 					  -1, -1, 0, 0, -1, -1, 0};
@@ -270,7 +272,7 @@ prelim_size_sections (void)
     {
       expld.phase = lang_mark_phase_enum;
       expld.dataseg.phase = exp_seg_none;
-      one_lang_size_sections_pass (NULL, FALSE);
+      one_lang_size_sections_pass (NULL, false);
       /* We must not cache anything from the preliminary sizing.  */
       lang_reset_memory_regions ();
     }
@@ -294,7 +296,19 @@ ppc_before_allocation (void)
 	    einfo (_("%X%P: inline PLT: %E\n"));
 	}
 
-      if (ppc64_elf_tls_setup (&link_info)
+      if (!ppc64_elf_tls_setup (&link_info))
+	einfo (_("%X%P: TLS problem %E\n"));
+    }
+
+  gld${EMULATION_NAME}_before_allocation ();
+}
+
+static void
+ppc_edit (void)
+{
+  if (stub_file != NULL)
+    {
+      if (elf_hash_table (&link_info)->tls_sec != NULL
 	  && !no_tls_opt)
 	{
 	  /* Size the sections.  This is premature, but we want to know the
@@ -323,8 +337,6 @@ ppc_before_allocation (void)
 	    sort_toc_sections (&toc_os->children, NULL, NULL);
 	}
     }
-
-  gld${EMULATION_NAME}_before_allocation ();
 }
 
 struct hook_stub_info
@@ -335,11 +347,11 @@ struct hook_stub_info
 
 /* Traverse the linker tree to find the spot where the stub goes.  */
 
-static bfd_boolean
+static bool
 hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 {
   lang_statement_union_type *l;
-  bfd_boolean ret;
+  bool ret;
 
   for (; (l = *lp) != NULL; lp = &l->header.next)
     {
@@ -377,7 +389,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 		 before its associated input section.  */
 	      *lp = info->add.head;
 	      *(info->add.tail) = l;
-	      return TRUE;
+	      return true;
 	    }
 	  break;
 
@@ -398,7 +410,7 @@ hook_in_stub (struct hook_stub_info *info, lang_statement_union_type **lp)
 	  break;
 	}
     }
-  return FALSE;
+  return false;
 }
 
 
@@ -433,7 +445,7 @@ ppc_add_stub_section (const char *stub_sec_name, asection *input_section)
 
   info.input_section = input_section;
   lang_list_init (&info.add);
-  lang_add_section (&info.add, stub_sec, NULL, os);
+  lang_add_section (&info.add, stub_sec, NULL, NULL, os);
 
   if (info.add.head == NULL)
     goto err_ret;
@@ -455,7 +467,7 @@ ppc_layout_sections_again (void)
   /* If we have changed sizes of the stub sections, then we need
      to recalculate all the section offsets.  This may mean we need to
      add even more stubs.  */
-  ldelf_map_segments (TRUE);
+  ldelf_map_segments (true);
 
   if (!bfd_link_relocatable (&link_info))
     ppc64_elf_set_toc (&link_info, link_info.output_bfd);
@@ -655,13 +667,13 @@ EOF
 if grep -q 'ld_elf32_spu_emulation' ldemul-list.h; then
   fragment <<EOF
 /* Special handling for embedded SPU executables.  */
-extern bfd_boolean embedded_spu_file (lang_input_statement_type *, const char *);
+extern bool embedded_spu_file (lang_input_statement_type *, const char *);
 
-static bfd_boolean
+static bool
 ppc64_recognized_file (lang_input_statement_type *entry)
 {
   if (embedded_spu_file (entry, "-m64"))
-    return TRUE;
+    return true;
 
   return ldelf_load_symbols (entry);
 }
@@ -995,7 +1007,7 @@ PARSE_AND_LIST_ARGS_CASES=${PARSE_AND_LIST_ARGS_CASES}'
       no_toc_sort = 1;
       params.plt_static_chain = 1;
       params.no_pcrel_opt = 1;
-      return FALSE;
+      return false;
 '
 
 # Put these extra ppc64elf routines in ld_${EMULATION_NAME}_emulation

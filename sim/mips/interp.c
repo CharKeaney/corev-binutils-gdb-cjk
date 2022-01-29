@@ -22,7 +22,9 @@ code on the hardware.
 
 */
 
-#include "config.h"
+/* This must come before any other includes.  */
+#include "defs.h"
+
 #include "bfd.h"
 #include "sim-main.h"
 #include "sim-utils.h"
@@ -32,32 +34,22 @@ code on the hardware.
 
 #include "itable.h"
 
-
-#include "config.h"
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <ansidecl.h>
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
-#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
-#endif
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 
 #include "getopt.h"
 #include "libiberty.h"
 #include "bfd.h"
 #include "elf-bfd.h"
-#include "gdb/callback.h"   /* GDB simulator callback interface */
-#include "gdb/remote-sim.h" /* GDB simulator interface */
+#include "sim/callback.h"   /* GDB simulator callback interface */
+#include "sim/sim.h" /* GDB simulator interface */
+#include "sim-syscall.h"   /* Simulator system call support */
 
 char* pr_addr (SIM_ADDR addr);
 char* pr_uword64 (uword64 addr);
@@ -351,20 +343,19 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
 	  struct bfd *abfd, char * const *argv)
 {
   int i;
-  SIM_DESC sd = sim_state_alloc (kind, cb);
+  SIM_DESC sd = sim_state_alloc_extra (kind, cb,
+				       sizeof (struct mips_sim_state));
   sim_cpu *cpu;
 
   SIM_ASSERT (STATE_MAGIC (sd) == SIM_MAGIC_NUMBER);
 
   /* The cpu data is kept in a separately allocated chunk of memory.  */
-  if (sim_cpu_alloc_all (sd, 1, /*cgen_cpu_max_extra_bytes ()*/0) != SIM_RC_OK)
+  if (sim_cpu_alloc_all (sd, 1) != SIM_RC_OK)
     return 0;
 
   cpu = STATE_CPU (sd, 0); /* FIXME */
 
   /* FIXME: watchpoints code shouldn't need this */
-  STATE_WATCHPOINTS (sd)->pc = &(PC);
-  STATE_WATCHPOINTS (sd)->sizeof_pc = sizeof (PC);
   STATE_WATCHPOINTS (sd)->interrupt_handler = interrupt_event;
 
   /* Initialize the mechanism for doing insn profiling.  */
@@ -447,6 +438,9 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
 	  /* memory alias K1BASE@1,K1SIZE%MEMSIZE,K0BASE */
 	  sim_do_commandf (sd, "memory alias 0x%lx@1,0x%lx%%0x%lx,0x%0x",
 			   K1BASE, K1SIZE, (long)mem_size, K0BASE);
+	  if (WITH_TARGET_WORD_BITSIZE == 64)
+	    sim_do_commandf (sd, "memory alias 0x%x,0x%" PRIxTW ",0x%" PRIxTA,
+			     (K0BASE), mem_size, EXTENDED(K0BASE));
 	}
 
       device_init(sd);
@@ -549,8 +543,12 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
       {
 	/* FIXME: poking at dv-sockser internals, use tcp backend if
 	 --sockser_addr option was given.*/
+#ifdef HAVE_DV_SOCKSER
 	extern char* sockser_addr;
-	if(sockser_addr == NULL)
+#else
+# define sockser_addr NULL
+#endif
+	if (sockser_addr == NULL)
 	  sim_hw_parse (sd, "/tx3904sio@0xfffff300/backend stdio");
 	else
 	  sim_hw_parse (sd, "/tx3904sio@0xfffff300/backend tcp");
@@ -705,11 +703,16 @@ sim_open (SIM_OPEN_KIND kind, host_callback *cb,
   if (idt_monitor_base != 0)
     {
       unsigned loop;
-      unsigned idt_monitor_size = 1 << 11;
+      address_word idt_monitor_size = 1 << 11;
 
       /* the default monitor region */
-      sim_do_commandf (sd, "memory region 0x%x,0x%x",
-		       idt_monitor_base, idt_monitor_size);
+      if (WITH_TARGET_WORD_BITSIZE == 64)
+	sim_do_commandf (sd, "memory alias 0x%x,0x%" PRIxTW ",0x%" PRIxTA,
+			 idt_monitor_base, idt_monitor_size,
+			 EXTENDED (idt_monitor_base));
+      else
+	sim_do_commandf (sd, "memory region 0x%x,0x%x",
+			 idt_monitor_base, idt_monitor_size);
 
       /* Entry into the IDT monitor is via fixed address vectors, and
 	 not using machine instructions. To avoid clashing with use of
@@ -1023,12 +1026,11 @@ sim_create_inferior (SIM_DESC sd, struct bfd *abfd,
 	  sim_cpu *cpu = STATE_CPU (sd, cpu_nr);
 	  sim_cia pc = bfd_get_start_address (abfd);
 
-	  /* We need to undo brain-dead bfd behavior where it sign-extends
-	     addresses that are supposed to be unsigned.  See the mips bfd
-	     sign_extend_vma setting.  We have to check the ELF data itself
-	     in order to handle o32 & n32 ABIs.  */
-	  if (abfd->tdata.elf_obj_data->elf_header->e_ident[EI_CLASS] ==
-	      ELFCLASS32)
+	  /* The 64-bit BFD sign-extends MIPS addresses to model
+	     32-bit compatibility segments with 64-bit addressing.
+	     These addresses work as is on 64-bit targets but
+	     can be truncated for 32-bit targets.  */
+	  if (WITH_TARGET_WORD_BITSIZE == 32)
 	    pc = (unsigned32) pc;
 
 	  CPU_PC_SET (cpu, pc);
@@ -1157,6 +1159,23 @@ Recognized firmware names are: `idt', `pmon', `lsipmon', and `none'.\n",
   return SIM_RC_OK;
 }
 
+/* stat structures from MIPS32/64.  */
+static const char stat32_map[] =
+"st_dev,2:st_ino,2:st_mode,4:st_nlink,2:st_uid,2:st_gid,2"
+":st_rdev,2:st_size,4:st_atime,4:st_spare1,4:st_mtime,4:st_spare2,4"
+":st_ctime,4:st_spare3,4:st_blksize,4:st_blocks,4:st_spare4,8";
+
+static const char stat64_map[] =
+"st_dev,2:st_ino,2:st_mode,4:st_nlink,2:st_uid,2:st_gid,2"
+":st_rdev,2:st_size,8:st_atime,8:st_spare1,8:st_mtime,8:st_spare2,8"
+":st_ctime,8:st_spare3,8:st_blksize,8:st_blocks,8:st_spare4,16";
+
+/* Map for calls using the host struct stat.  */
+static const CB_TARGET_DEFS_MAP CB_stat_map[] =
+{
+  { "stat", CB_SYS_stat, 15 },
+  { 0, -1, -1 }
+};
 
 
 /* Simple monitor interface (currently setup for the IDT and PMON monitors) */
@@ -1177,7 +1196,7 @@ sim_monitor (SIM_DESC sd,
 
   /* The following callback functions are available, however the
      monitor we are simulating does not make use of them: get_errno,
-     isatty, lseek, rename, system, time and unlink */
+     isatty, rename, system and time.  */
   switch (reason)
     {
 
@@ -1248,6 +1267,56 @@ sim_monitor (SIM_DESC sd,
       {
         char tmp = (char)(A0 & 0xFF);
         sim_io_write_stdout (sd, &tmp, sizeof(char));
+	break;
+      }
+
+    case 13: /* int unlink(const char *path) */
+      {
+	char *path = fetch_str (sd, A0);
+	V0 = sim_io_unlink (sd, path);
+	free (path);
+	break;
+      }
+
+    case 14: /* int lseek(int fd, int offset, int whence) */
+      {
+	V0 = sim_io_lseek (sd, A0, A1, A2);
+	break;
+      }
+
+    case 15: /* int stat(const char *path, struct stat *buf); */
+      {
+	/* As long as the infrastructure doesn't cache anything
+	   related to the stat mapping, this trick gets us a dual
+	   "struct stat"-type mapping in the least error-prone way.  */
+	host_callback *cb = STATE_CALLBACK (sd);
+	const char *saved_map = cb->stat_map;
+	CB_TARGET_DEFS_MAP *saved_syscall_map = cb->syscall_map;
+	bfd *prog_bfd = STATE_PROG_BFD (sd);
+	int is_elf32bit = (elf_elfheader(prog_bfd)->e_ident[EI_CLASS] ==
+			   ELFCLASS32);
+	static CB_SYSCALL s;
+	CB_SYSCALL_INIT (&s);
+	s.func = 15;
+	/* Mask out the sign extension part for 64-bit targets because the
+	   MIPS simulator's memory model is still 32-bit.  */
+	s.arg1 = A0 & 0xFFFFFFFF;
+	s.arg2 = A1 & 0xFFFFFFFF;
+	s.p1 = (PTR) sd;
+	s.p2 = (PTR) cpu;
+	s.read_mem = sim_syscall_read_mem;
+	s.write_mem = sim_syscall_write_mem;
+
+	cb->syscall_map = (CB_TARGET_DEFS_MAP *) CB_stat_map;
+	cb->stat_map = is_elf32bit ? stat32_map : stat64_map;
+
+	if (cb_syscall (cb, &s) != CB_RC_OK)
+	  sim_engine_halt (sd, cpu, NULL, mips_pc_get (cpu),
+			   sim_stopped, SIM_SIGILL);
+
+	V0 = s.result;
+	cb->stat_map = saved_map;
+	cb->syscall_map = saved_syscall_map;
 	break;
       }
 

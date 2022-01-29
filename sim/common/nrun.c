@@ -1,5 +1,5 @@
 /* New version of run front end support for simulators.
-   Copyright (C) 1997-2020 Free Software Foundation, Inc.
+   Copyright (C) 1997-2021 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -15,28 +15,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* Need to be before general includes, to pick up e.g. _GNU_SOURCE.  */
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include "defs.h"
 
 #include <signal.h>
 #include <stdlib.h>
-
 /* For strsignal.  */
-#ifdef HAVE_STRING_H
 #include <string.h>
-#else
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#endif
 
 #include "sim-main.h"
 
 #include "bfd.h"
+#include "environ.h"
 
-#ifdef HAVE_ENVIRON
-extern char **environ;
+#ifndef HAVE_STRSIGNAL
+/* While libiberty provides a fallback, it doesn't provide a prototype.  */
+extern const char *strsignal (int);
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -135,11 +128,7 @@ main (int argc, char **argv)
     exit (1);
 
   /* Prepare the program for execution.  */
-#ifdef HAVE_ENVIRON
   sim_create_inferior (sd, prog_bfd, prog_argv, environ);
-#else
-  sim_create_inferior (sd, prog_bfd, prog_argv, NULL);
-#endif
 
   /* To accommodate relative file paths, chdir to sysroot now.  We
      mustn't do this until BFD has opened the program, else we wouldn't

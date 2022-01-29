@@ -1,5 +1,5 @@
 /* CTF type deduplication.
-   Copyright (C) 2019 Free Software Foundation, Inc.
+   Copyright (C) 2019-2021 Free Software Foundation, Inc.
 
    This file is part of libctf.
 
@@ -55,7 +55,7 @@
    *global type ID* or 'GID', a pair of an array offset and a ctf_id_t.  Since
    both are already 32 bits or less or can easily be constrained to that range,
    we can pack them both into a single 64-bit hash word for easy lookups, which
-   would be much more annoying to do with a ctf_file_t * and a ctf_id_t.  (On
+   would be much more annoying to do with a ctf_dict_t * and a ctf_id_t.  (On
    32-bit platforms, we must do that anyway, since pointers, and thus hash keys
    and values, are only 32 bits wide).  We track which inputs are parents of
    which other inputs so that we can correctly recognize that types we have
@@ -294,23 +294,23 @@
     approach, but with a smaller key, this is all we can do.  */
 
 static void *
-id_to_packed_id (ctf_file_t *fp, int input_num, ctf_id_t type)
+id_to_packed_id (ctf_dict_t *fp, int input_num, ctf_id_t type)
 {
   const void *lookup;
   ctf_type_id_key_t *dynkey = NULL;
   ctf_type_id_key_t key = { input_num, type };
 
-  if (!ctf_dynhash_lookup_kv (fp->ctf_dedup.cd_id_to_file_t,
+  if (!ctf_dynhash_lookup_kv (fp->ctf_dedup.cd_id_to_dict_t,
 			      &key, &lookup, NULL))
     {
       if ((dynkey = malloc (sizeof (ctf_type_id_key_t))) == NULL)
 	goto oom;
       memcpy (dynkey, &key, sizeof (ctf_type_id_key_t));
 
-      if (ctf_dynhash_insert (fp->ctf_dedup.cd_id_to_file_t, dynkey, NULL) < 0)
+      if (ctf_dynhash_insert (fp->ctf_dedup.cd_id_to_dict_t, dynkey, NULL) < 0)
 	goto oom;
 
-      ctf_dynhash_lookup_kv (fp->ctf_dedup.cd_id_to_file_t,
+      ctf_dynhash_lookup_kv (fp->ctf_dedup.cd_id_to_dict_t,
 			     dynkey, &lookup, NULL);
     }
   /* We use a raw assert() here because there isn't really a way to get any sort
@@ -352,7 +352,7 @@ make_set_element (ctf_dynhash_t *set, const void *key)
   if ((element = ctf_dynhash_lookup (set, key)) == NULL)
     {
       if ((element = ctf_dynset_create (htab_hash_string,
-					ctf_dynset_eq_string,
+					htab_eq_string,
 					NULL)) == NULL)
 	return NULL;
 
@@ -368,7 +368,7 @@ make_set_element (ctf_dynhash_t *set, const void *key)
 
 /* Initialize the dedup atoms table.  */
 int
-ctf_dedup_atoms_init (ctf_file_t *fp)
+ctf_dedup_atoms_init (ctf_dict_t *fp)
 {
   if (fp->ctf_dedup_atoms)
     return 0;
@@ -376,7 +376,7 @@ ctf_dedup_atoms_init (ctf_file_t *fp)
   if (!fp->ctf_dedup_atoms_alloc)
     {
       if ((fp->ctf_dedup_atoms_alloc
-	   = ctf_dynset_create (htab_hash_string, ctf_dynset_eq_string,
+	   = ctf_dynset_create (htab_hash_string, htab_eq_string,
 				free)) == NULL)
 	return ctf_set_errno (fp, ENOMEM);
     }
@@ -387,7 +387,7 @@ ctf_dedup_atoms_init (ctf_file_t *fp)
 /* Intern things in the dedup atoms table.  */
 
 static const char *
-intern (ctf_file_t *fp, char *atom)
+intern (ctf_dict_t *fp, char *atom)
 {
   const void *foo;
 
@@ -414,7 +414,7 @@ intern (ctf_file_t *fp, char *atom)
    while allowing for the four C namespaces (normal, struct, union, enum).
    Return a new dynamically-allocated string.  */
 static const char *
-ctf_decorate_type_name (ctf_file_t *fp, const char *name, int kind)
+ctf_decorate_type_name (ctf_dict_t *fp, const char *name, int kind)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   const char *ret;
@@ -484,13 +484,13 @@ ctf_dedup_sha1_add (ctf_sha1_t *sha1, const void *buf, size_t len,
 }
 
 static const char *
-ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
-		     ctf_file_t **inputs, uint32_t *parents,
+ctf_dedup_hash_type (ctf_dict_t *fp, ctf_dict_t *input,
+		     ctf_dict_t **inputs, uint32_t *parents,
 		     int input_num, ctf_id_t type, int flags,
 		     unsigned long depth,
-		     int (*populate_fun) (ctf_file_t *fp,
-					  ctf_file_t *input,
-					  ctf_file_t **inputs,
+		     int (*populate_fun) (ctf_dict_t *fp,
+					  ctf_dict_t *input,
+					  ctf_dict_t **inputs,
 					  int input_num,
 					  ctf_id_t type,
 					  void *id,
@@ -519,7 +519,7 @@ ctf_dedup_is_stub (const char *name, int kind, int fwdkind, int flags)
    Only called for forwards or forwardable types with names, when the link mode
    is CTF_LINK_SHARE_DUPLICATED.  */
 static int
-ctf_dedup_record_origin (ctf_file_t *fp, int input_num, const char *decorated,
+ctf_dedup_record_origin (ctf_dict_t *fp, int input_num, const char *decorated,
 			 void *id)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
@@ -551,14 +551,14 @@ ctf_dedup_record_origin (ctf_file_t *fp, int input_num, const char *decorated,
    calls, recursively).  */
 
 static const char *
-ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
+ctf_dedup_rhash_type (ctf_dict_t *fp, ctf_dict_t *input, ctf_dict_t **inputs,
 		      uint32_t *parents, int input_num, ctf_id_t type,
 		      void *type_id, const ctf_type_t *tp, const char *name,
 		      const char *decorated, int kind, int flags,
 		      unsigned long depth,
-		      int (*populate_fun) (ctf_file_t *fp,
-					   ctf_file_t *input,
-					   ctf_file_t **inputs,
+		      int (*populate_fun) (ctf_dict_t *fp,
+					   ctf_dict_t *input,
+					   ctf_dict_t **inputs,
 					   int input_num,
 					   ctf_id_t type,
 					   void *id,
@@ -572,7 +572,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
   char hashbuf[CTF_SHA1_SIZE];
   const char *hval = NULL;
   const char *whaterr;
-  int err;
+  int err = 0;
 
   const char *citer = NULL;
   ctf_dynset_t *citers = NULL;
@@ -581,15 +581,16 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 #define ADD_CITER(citers, hval)						\
   do									\
     {									\
-      whaterr = "updating citers";					\
+      whaterr = N_("error updating citers");				\
       if (!citers)							\
 	if ((citers = ctf_dynset_create (htab_hash_string,		\
-					  ctf_dynset_eq_string,		\
-					  NULL)) == NULL)		\
+					 htab_eq_string,		\
+					 NULL)) == NULL)		\
 	  goto oom;							\
       if (ctf_dynset_cinsert (citers, hval) < 0)			\
 	goto oom;							\
-    } while (0)
+    }									\
+  while (0)
 
   /* If this is a named struct or union or a forward to one, and this is a child
      traversal, treat this type as if it were a forward -- do not recurse to
@@ -610,14 +611,13 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 
       if ((hval = intern (fp, strdup (hashbuf))) == NULL)
 	{
-	  ctf_err_warn (fp, 0, "%s (%i): out of memory during forwarding-stub "
-			"hashing for type with GID %p; errno: %s",
-			ctf_link_input_name (input), input_num, type_id,
-			strerror (errno));
+	  ctf_err_warn (fp, 0, 0, _("%s (%i): out of memory during forwarding-"
+				    "stub hashing for type with GID %p"),
+			ctf_link_input_name (input), input_num, type_id);
 	  return NULL;				/* errno is set for us.  */
 	}
 
-      /* In share--duplicated link mode, make sure the origin of this type is
+      /* In share-duplicated link mode, make sure the origin of this type is
 	 recorded, even if this is a type in a parent dict which will not be
 	 directly traversed.  */
       if (d->cd_link_flags & CTF_LINK_SHARE_DUPLICATED
@@ -639,6 +639,27 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 	&& ctf_dedup_record_origin (fp, input_num, decorated, type_id) < 0)
       return NULL;				/* errno is set for us.  */
 
+#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
+  ctf_dprintf ("%lu: hashing thing with ID %i/%lx (kind %i): %s.\n",
+	       depth, input_num, type, kind, name ? name : "");
+#endif
+
+  /* Some type kinds don't have names: the API provides no way to set the name,
+     so the type the deduplicator outputs will be nameless even if the input
+     somehow has a name, and the name should not be mixed into the hash.  */
+
+  switch (kind)
+    {
+    case CTF_K_POINTER:
+    case CTF_K_ARRAY:
+    case CTF_K_FUNCTION:
+    case CTF_K_VOLATILE:
+    case CTF_K_CONST:
+    case CTF_K_RESTRICT:
+    case CTF_K_SLICE:
+      name = NULL;
+    }
+
   /* Mix in invariant stuff, transforming the type kind if needed.  Note that
      the vlen is *not* hashed in: the actual variable-length info is hashed in
      instead, piecewise.  The vlen is not part of the type, only the
@@ -647,11 +668,6 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
      compiler and the deduplicator set the nonroot flag to indicate clashes with
      *other types in the same TU* with the same name: so two types can easily
      have distinct nonroot flags, yet be exactly the same type.*/
-
-#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
-  ctf_dprintf ("%lu: hashing thing with ID %i/%lx (kind %i): %s.\n",
-	       depth, input_num, type, kind, name ? name : "");
-#endif
 
   ctf_sha1_init (&hash);
   if (name)
@@ -680,8 +696,8 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 			    depth);
 	if (ctf_type_encoding (input, type, &ep) < 0)
 	  {
-	    whaterr = "encoding";
-	    goto err;
+	    whaterr = N_("error getting encoding");
+	    goto input_err;
 	  }
 	ctf_dedup_sha1_add (&hash, &ep, sizeof (ctf_encoding_t), "encoding",
 			    depth);
@@ -699,7 +715,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 				       child_type, flags, depth,
 				       populate_fun)) == NULL)
 	{
-	  whaterr = "referenced type hashing";
+	  whaterr = N_("error doing referenced type hashing");
 	  goto err;
 	}
       ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "referenced type",
@@ -728,7 +744,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 					 child_type, flags, depth,
 					 populate_fun)) == NULL)
 	  {
-	    whaterr = "slice-referenced type hashing";
+	    whaterr = N_("error doing slice-referenced type hashing");
 	    goto err;
 	  }
 	ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "sliced type",
@@ -736,7 +752,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 	citer = hval;
 
 	if ((dtd = ctf_dynamic_type (input, type)) != NULL)
-	  slice = &dtd->dtd_u.dtu_slice;
+	  slice = (ctf_slice_t *) dtd->dtd_vlen;
 	else
 	  slice = (ctf_slice_t *) ((uintptr_t) tp + increment);
 
@@ -753,15 +769,15 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 
 	if (ctf_array_info (input, type, &ar) < 0)
 	  {
-	    whaterr = "array info";
-	    goto err;
+	    whaterr = N_("error getting array info");
+	    goto input_err;
 	  }
 
 	if ((hval = ctf_dedup_hash_type (fp, input, inputs, parents, input_num,
 					 ar.ctr_contents, flags, depth,
 					 populate_fun)) == NULL)
 	  {
-	    whaterr = "array contents type hashing";
+	    whaterr = N_("error doing array contents type hashing");
 	    goto err;
 	  }
 	ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "array contents",
@@ -772,7 +788,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 					 ar.ctr_index, flags, depth,
 					 populate_fun)) == NULL)
 	  {
-	    whaterr = "array index type hashing";
+	    whaterr = N_("error doing array index type hashing");
 	    goto err;
 	  }
 	ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "array index",
@@ -791,15 +807,15 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 
 	if (ctf_func_type_info (input, type, &fi) < 0)
 	  {
-	    whaterr = "func type info";
-	    goto err;
+	    whaterr = N_("error getting func type info");
+	    goto input_err;
 	  }
 
 	if ((hval = ctf_dedup_hash_type (fp, input, inputs, parents, input_num,
 					 fi.ctc_return, flags, depth,
 					 populate_fun)) == NULL)
 	  {
-	    whaterr = "func return type";
+	    whaterr = N_("error getting func return type");
 	    goto err;
 	  }
 	ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "func return",
@@ -812,15 +828,16 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 
 	if ((args = calloc (fi.ctc_argc, sizeof (ctf_id_t))) == NULL)
 	  {
-	    whaterr = "memory allocation";
+	    err = ENOMEM;
+	    whaterr = N_("error doing memory allocation");
 	    goto err;
 	  }
 
 	if (ctf_func_type_args (input, type, fi.ctc_argc, args) < 0)
 	  {
 	    free (args);
-	    whaterr = "func arg type";
-	    goto err;
+	    whaterr = N_("error getting func arg type");
+	    goto input_err;
 	  }
 	for (j = 0; j < fi.ctc_argc; j++)
 	  {
@@ -829,7 +846,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 					     populate_fun)) == NULL)
 	      {
 		free (args);
-		whaterr = "func arg type hashing";
+		whaterr = N_("error doing func arg type hashing");
 		goto err;
 	      }
 	    ctf_dedup_sha1_add (&hash, hval, strlen (hval) + 1, "func arg type",
@@ -854,8 +871,8 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 	  }
 	if (ctf_errno (input) != ECTF_NEXT_END)
 	  {
-	    whaterr = "enum member iteration";
-	    goto err;
+	    whaterr = N_("error doing enum member iteration");
+	    goto input_err;
 	  }
 	break;
       }
@@ -872,8 +889,8 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 	ctf_dedup_sha1_add (&hash, &size, sizeof (ssize_t), "struct size",
 			    depth);
 
-	while ((offset = ctf_member_next (input, type, &i, &mname,
-					  &membtype)) >= 0)
+	while ((offset = ctf_member_next (input, type, &i, &mname, &membtype,
+					  0)) >= 0)
 	  {
 	    if (mname == NULL)
 	      mname = "";
@@ -887,7 +904,7 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 					     input_num, membtype, flags, depth,
 					     populate_fun)) == NULL)
 	      {
-		whaterr = "struct/union member type hashing";
+		whaterr = N_("error doing struct/union member type hashing");
 		goto iterr;
 	      }
 
@@ -899,26 +916,26 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 	  }
 	if (ctf_errno (input) != ECTF_NEXT_END)
 	  {
-	    whaterr = "struct/union member iteration";
-	    goto err;
+	    whaterr = N_("error doing struct/union member iteration");
+	    goto input_err;
 	  }
 	break;
       }
     default:
-      whaterr = "unknown type kind";
+      whaterr = N_("error: unknown type kind");
       goto err;
     }
   ctf_sha1_fini (&hash, hashbuf);
 
   if ((hval = intern (fp, strdup (hashbuf))) == NULL)
     {
-      whaterr = "hash internment";
+      whaterr = N_("cannot intern hash");
       goto oom;
     }
 
   /* Populate the citers for this type's subtypes, now the hash for the type
      itself is known.  */
-  whaterr = "citer tracking";
+  whaterr = N_("error tracking citers");
 
   if (citer)
     {
@@ -955,19 +972,19 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
 
  iterr:
   ctf_next_destroy (i);
+ input_err:
+  err = ctf_errno (input);
  err:
   ctf_sha1_fini (&hash, NULL);
-  ctf_err_warn (fp, 0, "%s (%i): %s error during type hashing for "
-		"type %lx, kind %i: CTF error: %s; errno: %s",
-		ctf_link_input_name (input), input_num, whaterr, type,
-		kind, ctf_errmsg (ctf_errno (fp)), strerror (errno));
+  ctf_err_warn (fp, 0, err, _("%s (%i): %s: during type hashing for type %lx, "
+			      "kind %i"), ctf_link_input_name (input),
+		input_num, gettext (whaterr), type, kind);
   return NULL;
  oom:
   ctf_set_errno (fp, errno);
-  ctf_err_warn (fp, 0, "%s (%i): %s error during type hashing for "
-		"type %lx, kind %i: CTF error: %s; errno: %s",
-		ctf_link_input_name (input), input_num, whaterr, type,
-		kind, ctf_errmsg (ctf_errno (fp)), strerror (errno));
+  ctf_err_warn (fp, 0, 0, _("%s (%i): %s: during type hashing for type %lx, "
+			    "kind %i"), ctf_link_input_name (input),
+		input_num, gettext (whaterr), type, kind);
   return NULL;
 }
 
@@ -993,13 +1010,13 @@ ctf_dedup_rhash_type (ctf_file_t *fp, ctf_file_t *input, ctf_file_t **inputs,
    Returns a hash value (an atom), or NULL on error.  */
 
 static const char *
-ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
-		     ctf_file_t **inputs, uint32_t *parents,
+ctf_dedup_hash_type (ctf_dict_t *fp, ctf_dict_t *input,
+		     ctf_dict_t **inputs, uint32_t *parents,
 		     int input_num, ctf_id_t type, int flags,
 		     unsigned long depth,
-		     int (*populate_fun) (ctf_file_t *fp,
-					  ctf_file_t *input,
-					  ctf_file_t **inputs,
+		     int (*populate_fun) (ctf_dict_t *fp,
+					  ctf_dict_t *input,
+					  ctf_dict_t **inputs,
 					  int input_num,
 					  ctf_id_t type,
 					  void *id,
@@ -1034,8 +1051,10 @@ ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
 
   if ((tp = ctf_lookup_by_id (&input, type)) == NULL)
     {
-      ctf_err_warn (fp, 0, "%s (%i): lookup failure for type %lx: flags %x",
-		    ctf_link_input_name (input), input_num, type, flags);
+      ctf_set_errno (fp, ctf_errno (input));
+      ctf_err_warn (fp, 0, 0, _("%s (%i): lookup failure for type %lx: "
+				"flags %x"), ctf_link_input_name (input),
+		    input_num, type, flags);
       return NULL;		/* errno is set for us.  */
     }
 
@@ -1044,10 +1063,6 @@ ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
 
   if (tp->ctt_name == 0 || !name || name[0] == '\0')
     name = NULL;
-
-  /* Treat the unknown kind just like the unimplemented type.  */
-  if (kind == CTF_K_UNKNOWN)
-    return "00000000000000000000";
 
   /* Decorate the name appropriately for the namespace it appears in: forwards
      appear in the namespace of their referent.  */
@@ -1106,14 +1121,14 @@ ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
 
       if (ctf_dynhash_cinsert (d->cd_type_hashes, type_id, hval) < 0)
 	{
-	  whaterr = "hash caching";
+	  whaterr = N_("error hash caching");
 	  goto oom;
 	}
 
       if (populate_fun (fp, input, inputs, input_num, type, type_id,
 			decorated, hval) < 0)
 	{
-	  whaterr = "population function";
+	  whaterr = N_("error calling population function");
 	  goto err;				/* errno is set for us. */
 	}
     }
@@ -1127,11 +1142,10 @@ ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
  oom:
   ctf_set_errno (fp, errno);
  err:
-  ctf_err_warn (fp, 0, "%s (%i): %s error during type hashing, type %lx, "
-		"kind %i: CTF errno: %s; errno: %s",
-		ctf_link_input_name (input), input_num, whaterr, type,
-		kind, ctf_errmsg (ctf_errno (fp)),
-		strerror (errno));
+  ctf_err_warn (fp, 0, 0, _("%s (%i): %s: during type hashing, "
+			    "type %lx, kind %i"),
+		ctf_link_input_name (input), input_num,
+		gettext (whaterr), type, kind);
   return NULL;
 }
 
@@ -1141,8 +1155,8 @@ ctf_dedup_hash_type (ctf_file_t *fp, ctf_file_t *input,
    cd_output_first_tu mapping.  */
 
 static int
-ctf_dedup_populate_mappings (ctf_file_t *fp, ctf_file_t *input _libctf_unused_,
-			     ctf_file_t **inputs _libctf_unused_,
+ctf_dedup_populate_mappings (ctf_dict_t *fp, ctf_dict_t *input _libctf_unused_,
+			     ctf_dict_t **inputs _libctf_unused_,
 			     int input_num _libctf_unused_,
 			     ctf_id_t type _libctf_unused_, void *id,
 			     const char *decorated_name,
@@ -1214,11 +1228,11 @@ ctf_dedup_populate_mappings (ctf_file_t *fp, ctf_file_t *input _libctf_unused_,
 
       while ((err = ctf_dynset_cnext (type_ids, &i, &one_id)) == 0)
 	{
-	  ctf_file_t *foo = inputs[CTF_DEDUP_GID_TO_INPUT (one_id)];
+	  ctf_dict_t *foo = inputs[CTF_DEDUP_GID_TO_INPUT (one_id)];
 	  ctf_id_t bar = CTF_DEDUP_GID_TO_TYPE (one_id);
 	  if (ctf_type_kind_unsliced (foo, bar) != orig_kind)
 	    {
-	      ctf_err_warn (fp, 1, "added wrong kind to output mapping "
+	      ctf_err_warn (fp, 1, 0, "added wrong kind to output mapping "
 			    "for hash %s named %s: %p/%lx from %s is "
 			    "kind %i, but newly-added %p/%lx from %s is "
 			    "kind %i", hval,
@@ -1287,7 +1301,7 @@ ctf_dedup_populate_mappings (ctf_file_t *fp, ctf_file_t *input _libctf_unused_,
    ctf_dedup_maybe_synthesize_forward.)  */
 
 static int
-ctf_dedup_mark_conflicting_hash (ctf_file_t *fp, const char *hval)
+ctf_dedup_mark_conflicting_hash (ctf_dict_t *fp, const char *hval)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   ctf_next_t *i = NULL;
@@ -1333,7 +1347,7 @@ ctf_dedup_mark_conflicting_hash (ctf_file_t *fp, const char *hval)
 
 /* Look up a type kind from the output mapping, given a type hash value.  */
 static int
-ctf_dedup_hash_kind (ctf_file_t *fp, ctf_file_t **inputs, const char *hash)
+ctf_dedup_hash_kind (ctf_dict_t *fp, ctf_dict_t **inputs, const char *hash)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   void *id;
@@ -1365,8 +1379,8 @@ ctf_dedup_hash_kind (ctf_file_t *fp, ctf_file_t **inputs, const char *hash)
 /* Used to keep a count of types: i.e. distinct type hash values.  */
 typedef struct ctf_dedup_type_counter
 {
-  ctf_file_t *fp;
-  ctf_file_t **inputs;
+  ctf_dict_t *fp;
+  ctf_dict_t **inputs;
   int num_non_forwards;
 } ctf_dedup_type_counter_t;
 
@@ -1403,14 +1417,14 @@ ctf_dedup_count_types (void *key_, void *value _libctf_unused_, void *arg_)
 /* Detect name ambiguity and mark ambiguous names as conflicting, other than the
    most common.  */
 static int
-ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
+ctf_dedup_detect_name_ambiguity (ctf_dict_t *fp, ctf_dict_t **inputs)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   ctf_next_t *i = NULL;
   void *k;
   void *v;
   int err;
-  const char *erm;
+  const char *whaterr;
 
   /* Go through cd_name_counts for all CTF namespaces in turn.  */
 
@@ -1474,7 +1488,7 @@ ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
 		}
 	      if (err != ECTF_NEXT_END)
 		{
-		  erm = "marking conflicting structs/unions";
+		  whaterr = N_("error marking conflicting structs/unions");
 		  goto iterr;
 		}
 	    }
@@ -1511,7 +1525,7 @@ ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
 	    }
 	  if (err != ECTF_NEXT_END)
 	    {
-	      erm = "finding commonest conflicting type";
+	      whaterr = N_("error finding commonest conflicting type");
 	      goto iterr;
 	    }
 
@@ -1526,20 +1540,20 @@ ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
 			   hval, (const char *) k);
 	      if (ctf_dedup_mark_conflicting_hash (fp, hval) < 0)
 		{
-		  erm = "marking hashes as conflicting";
+		  whaterr = N_("error marking hashes as conflicting");
 		  goto err;
 		}
 	    }
 	  if (err != ECTF_NEXT_END)
 	    {
-	      erm = "marking uncommon conflicting types";
+	      whaterr = N_("marking uncommon conflicting types");
 	      goto iterr;
 	    }
 	}
     }
   if (err != ECTF_NEXT_END)
     {
-      erm = "scanning for ambiguous names";
+      whaterr = N_("scanning for ambiguous names");
       goto iterr;
     }
 
@@ -1547,11 +1561,11 @@ ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
 
  err:
   ctf_next_destroy (i);
-  ctf_err_warn (fp, 0, "%s: %s", erm, ctf_errmsg (ctf_errno (fp)));
-  return -1;
+  ctf_err_warn (fp, 0, 0, "%s", gettext (whaterr));
+  return -1;					/* errno is set for us.  */
 
  iterr:
-  ctf_err_warn (fp, 0, "iteration failed %s: %s", erm, ctf_errmsg (err));
+  ctf_err_warn (fp, 0, err, _("iteration failed: %s"), gettext (whaterr));
   return ctf_set_errno (fp, err);
 
  assert_err:
@@ -1562,7 +1576,7 @@ ctf_dedup_detect_name_ambiguity (ctf_file_t *fp, ctf_file_t **inputs)
 /* Initialize the deduplication machinery.  */
 
 static int
-ctf_dedup_init (ctf_file_t *fp)
+ctf_dedup_init (ctf_dict_t *fp)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   size_t i;
@@ -1571,7 +1585,7 @@ ctf_dedup_init (ctf_file_t *fp)
       goto oom;
 
 #if IDS_NEED_ALLOCATION
-  if ((d->cd_id_to_file_t = ctf_dynhash_create (ctf_hash_type_id_key,
+  if ((d->cd_id_to_dict_t = ctf_dynhash_create (ctf_hash_type_id_key,
 						ctf_hash_eq_type_id_key,
 						free, NULL)) == NULL)
     goto oom;
@@ -1628,6 +1642,12 @@ ctf_dedup_init (ctf_file_t *fp)
     goto oom;
 #endif
 
+  if ((d->cd_input_nums
+       = ctf_dynhash_create (ctf_hash_integer,
+			     ctf_hash_eq_integer,
+			     NULL, NULL)) == NULL)
+    goto oom;
+
   if ((d->cd_emission_struct_members
        = ctf_dynhash_create (ctf_hash_integer,
 			     ctf_hash_eq_integer,
@@ -1636,26 +1656,28 @@ ctf_dedup_init (ctf_file_t *fp)
 
   if ((d->cd_conflicting_types
        = ctf_dynset_create (htab_hash_string,
-			    ctf_dynset_eq_string, NULL)) == NULL)
+			    htab_eq_string, NULL)) == NULL)
     goto oom;
 
   return 0;
 
  oom:
-  ctf_err_warn (fp, 0, "ctf_dedup_init: cannot initialize: "
-		"out of memory.");
+  ctf_err_warn (fp, 0, ENOMEM, _("ctf_dedup_init: cannot initialize: "
+				 "out of memory"));
   return ctf_set_errno (fp, ENOMEM);
 }
 
+/* No ctf_dedup calls are allowed after this call other than starting a new
+   deduplication via ctf_dedup (not even ctf_dedup_type_mapping lookups).  */
 void
-ctf_dedup_fini (ctf_file_t *fp, ctf_file_t **outputs, uint32_t noutputs)
+ctf_dedup_fini (ctf_dict_t *fp, ctf_dict_t **outputs, uint32_t noutputs)
 {
   ctf_dedup_t *d = &fp->ctf_dedup;
   size_t i;
 
   /* ctf_dedup_atoms is kept across links.  */
 #if IDS_NEED_ALLOCATION
-  ctf_dynhash_destroy (d->cd_id_to_file_t);
+  ctf_dynhash_destroy (d->cd_id_to_dict_t);
 #endif
   for (i = 0; i < 4; i++)
     ctf_dynhash_destroy (d->cd_decorated_names[i]);
@@ -1668,6 +1690,7 @@ ctf_dedup_fini (ctf_file_t *fp, ctf_file_t **outputs, uint32_t noutputs)
 #ifdef ENABLE_LIBCTF_HASH_DEBUGGING
   ctf_dynhash_destroy (d->cd_output_mapping_guard);
 #endif
+  ctf_dynhash_destroy (d->cd_input_nums);
   ctf_dynhash_destroy (d->cd_emission_struct_members);
   ctf_dynset_destroy (d->cd_conflicting_types);
 
@@ -1679,7 +1702,7 @@ ctf_dedup_fini (ctf_file_t *fp, ctf_file_t **outputs, uint32_t noutputs)
 	  ctf_dedup_t *od = &outputs[i]->ctf_dedup;
 	  ctf_dynhash_destroy (od->cd_output_emission_hashes);
 	  ctf_dynhash_destroy (od->cd_output_emission_conflicted_forwards);
-	  ctf_file_close (od->cd_output);
+	  ctf_dict_close (od->cd_output);
 	}
     }
   memset (d, 0, sizeof (ctf_dedup_t));
@@ -1688,16 +1711,16 @@ ctf_dedup_fini (ctf_file_t *fp, ctf_file_t **outputs, uint32_t noutputs)
 /* Return 1 if this type is cited by multiple input dictionaries.  */
 
 static int
-ctf_dedup_multiple_input_dicts (ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_multiple_input_dicts (ctf_dict_t *output, ctf_dict_t **inputs,
 				const char *hval)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
   ctf_dynset_t *type_ids;
   ctf_next_t *i = NULL;
   void *id;
-  ctf_file_t *found = NULL, *relative_found = NULL;
+  ctf_dict_t *found = NULL, *relative_found = NULL;
   const char *type_id;
-  ctf_file_t *input_fp;
+  ctf_dict_t *input_fp;
   ctf_id_t input_id;
   const char *name;
   const char *decorated;
@@ -1716,7 +1739,7 @@ ctf_dedup_multiple_input_dicts (ctf_file_t *output, ctf_file_t **inputs,
 
   while ((err = ctf_dynset_next (type_ids, &i, &id)) == 0)
     {
-      ctf_file_t *fp = inputs[CTF_DEDUP_GID_TO_INPUT (id)];
+      ctf_dict_t *fp = inputs[CTF_DEDUP_GID_TO_INPUT (id)];
 
       if (fp == found || fp == relative_found)
 	continue;
@@ -1740,10 +1763,9 @@ ctf_dedup_multiple_input_dicts (ctf_file_t *output, ctf_file_t **inputs,
     }
   if ((err != ECTF_NEXT_END) && (err != 0))
     {
-      ctf_err_warn (output, 0, "propagating conflictedness: %s",
-		    ctf_errmsg (err));
-      ctf_set_errno (output, err);
-      return -1;
+      ctf_err_warn (output, 0, err, _("iteration error "
+				      "propagating conflictedness"));
+      return ctf_set_errno (output, err);
     }
 
   if (multiple)
@@ -1763,7 +1785,7 @@ ctf_dedup_multiple_input_dicts (ctf_file_t *output, ctf_file_t **inputs,
   name = ctf_type_name_raw (input_fp, input_id);
 
   if ((fwdkind == CTF_K_STRUCT || fwdkind == CTF_K_UNION)
-      && name && name[0] != '\0')
+      && name[0] != '\0')
     {
       const void *origin;
 
@@ -1784,7 +1806,7 @@ ctf_dedup_multiple_input_dicts (ctf_file_t *output, ctf_file_t **inputs,
    types.  Only used if the link mode is CTF_LINK_SHARE_DUPLICATED.  */
 
 static int
-ctf_dedup_conflictify_unshared (ctf_file_t *output, ctf_file_t **inputs)
+ctf_dedup_conflictify_unshared (ctf_dict_t *output, ctf_dict_t **inputs)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
   ctf_next_t *i = NULL;
@@ -1792,7 +1814,7 @@ ctf_dedup_conflictify_unshared (ctf_file_t *output, ctf_file_t **inputs)
   const void *k;
   ctf_dynset_t *to_mark = NULL;
 
-  if ((to_mark = ctf_dynset_create (htab_hash_string, ctf_dynset_eq_string,
+  if ((to_mark = ctf_dynset_create (htab_hash_string, htab_eq_string,
 				    NULL)) == NULL)
     goto err_no;
 
@@ -1836,11 +1858,9 @@ ctf_dedup_conflictify_unshared (ctf_file_t *output, ctf_file_t **inputs)
   err = ctf_errno (output);
   ctf_next_destroy (i);
  iterr:
-  ctf_set_errno (output, err);
   ctf_dynset_destroy (to_mark);
-  ctf_err_warn (output, 0, "conflictifying unshared types: %s",
-		ctf_errmsg (ctf_errno (output)));
-  return -1;
+  ctf_err_warn (output, 0, err, _("conflictifying unshared types"));
+  return ctf_set_errno (output, err);
 }
 
 /* The core deduplicator.  Populate cd_output_mapping in the output ctf_dedup
@@ -1858,18 +1878,28 @@ ctf_dedup_conflictify_unshared (ctf_file_t *output, ctf_file_t **inputs)
    ctf_dedup_emit afterwards to do that.  */
 
 int
-ctf_dedup (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
+ctf_dedup (ctf_dict_t *output, ctf_dict_t **inputs, uint32_t ninputs,
 	   uint32_t *parents, int cu_mapped)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
   size_t i;
   ctf_next_t *it = NULL;
 
-  for (i = 0; i < ninputs; i++)
-    ctf_dprintf ("Input %i: %s\n", (int) i, ctf_link_input_name (inputs[i]));
-
   if (ctf_dedup_init (output) < 0)
     return -1; 					/* errno is set for us.  */
+
+  for (i = 0; i < ninputs; i++)
+    {
+      ctf_dprintf ("Input %i: %s\n", (int) i, ctf_link_input_name (inputs[i]));
+      if (ctf_dynhash_insert (d->cd_input_nums, inputs[i],
+			      (void *) (uintptr_t) i) < 0)
+	{
+	  ctf_set_errno (output, errno);
+	  ctf_err_warn (output, 0, errno, _("ctf_dedup: cannot initialize: %s\n"),
+			ctf_errmsg (errno));
+	  goto err;
+	}
+    }
 
   /* Some flags do not apply when CU-mapping: this is not a duplicated link,
      because there is only one output and we really don't want to end up marking
@@ -1894,14 +1924,17 @@ ctf_dedup (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
 
       while ((id = ctf_type_next (inputs[i], &it, NULL, 1)) != CTF_ERR)
 	{
-	  ctf_dedup_hash_type (output, inputs[i], inputs, parents,
-			       i, id, 0, 0, ctf_dedup_populate_mappings);
+	  if (ctf_dedup_hash_type (output, inputs[i], inputs,
+				   parents, i, id, 0, 0,
+				   ctf_dedup_populate_mappings) == NULL)
+	    goto err;				/* errno is set for us.  */
 	}
       if (ctf_errno (inputs[i]) != ECTF_NEXT_END)
 	{
-	  ctf_err_warn (output, 0, "iteration failure computing type "
-			"hashes: %s", ctf_errmsg (ctf_errno (inputs[i])));
-	  return ctf_set_errno (output, ctf_errno (inputs[i]));
+	  ctf_set_errno (output, ctf_errno (inputs[i]));
+	  ctf_err_warn (output, 0, 0, _("iteration failure "
+					"computing type hashes"));
+	  goto err;
 	}
     }
 
@@ -1912,7 +1945,7 @@ ctf_dedup (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
 
   ctf_dprintf ("Detecting type name ambiguity\n");
   if (ctf_dedup_detect_name_ambiguity (output, inputs) < 0)
-    return -1;					/* errno is set for us.  */
+      goto err;					/* errno is set for us.  */
 
   /* If the link mode is CTF_LINK_SHARE_DUPLICATED, we change any unconflicting
      types whose output mapping references only one input dict into a
@@ -1922,23 +1955,27 @@ ctf_dedup (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
     {
       ctf_dprintf ("Conflictifying unshared types\n");
       if (ctf_dedup_conflictify_unshared (output, inputs) < 0)
-	return -1;				/* errno is set for us.  */
+	goto err;				/* errno is set for us.  */
     }
   return 0;
+
+ err:
+  ctf_dedup_fini (output, NULL, 0);
+  return -1;
 }
 
 static int
-ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_rwalk_output_mapping (ctf_dict_t *output, ctf_dict_t **inputs,
 				uint32_t ninputs, uint32_t *parents,
 				ctf_dynset_t *already_visited,
 				const char *hval,
 				int (*visit_fun) (const char *hval,
-						  ctf_file_t *output,
-						  ctf_file_t **inputs,
+						  ctf_dict_t *output,
+						  ctf_dict_t **inputs,
 						  uint32_t ninputs,
 						  uint32_t *parents,
 						  int already_visited,
-						  ctf_file_t *input,
+						  ctf_dict_t *input,
 						  ctf_id_t type,
 						  void *id,
 						  int depth,
@@ -1948,19 +1985,19 @@ ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
 /* Like ctf_dedup_rwalk_output_mapping (which see), only takes a single target
    type and visits it.  */
 static int
-ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
-				    ctf_file_t **inputs, uint32_t ninputs,
+ctf_dedup_rwalk_one_output_mapping (ctf_dict_t *output,
+				    ctf_dict_t **inputs, uint32_t ninputs,
 				    uint32_t *parents,
 				    ctf_dynset_t *already_visited,
 				    int visited, void *type_id,
 				    const char *hval,
 				    int (*visit_fun) (const char *hval,
-						      ctf_file_t *output,
-						      ctf_file_t **inputs,
+						      ctf_dict_t *output,
+						      ctf_dict_t **inputs,
 						      uint32_t ninputs,
 						      uint32_t *parents,
 						      int already_visited,
-						      ctf_file_t *input,
+						      ctf_dict_t *input,
 						      ctf_id_t type,
 						      void *id,
 						      int depth,
@@ -1968,7 +2005,7 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
 				    void *arg, unsigned long depth)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
-  ctf_file_t *fp;
+  ctf_dict_t *fp;
   int input_num;
   ctf_id_t type;
   int ret;
@@ -1992,48 +2029,48 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
      times, which is worse.  */
 
 #define CTF_TYPE_WALK(type, errlabel, errmsg)				\
-  do {									\
-    void *type_id;							\
-    const char *hashval;						\
-    int cited_type_input_num = input_num;				\
+  do									\
+    {									\
+      void *type_id;							\
+      const char *hashval;						\
+      int cited_type_input_num = input_num;				\
 									\
-    if ((fp->ctf_flags & LCTF_CHILD) && (LCTF_TYPE_ISPARENT (fp, type))) \
-      cited_type_input_num = parents[input_num];			\
+      if ((fp->ctf_flags & LCTF_CHILD) && (LCTF_TYPE_ISPARENT (fp, type))) \
+	cited_type_input_num = parents[input_num];			\
 									\
-    type_id = CTF_DEDUP_GID (output, cited_type_input_num, type);	\
+      type_id = CTF_DEDUP_GID (output, cited_type_input_num, type);	\
 									\
-    if (type == 0)							\
-      {									\
-	ctf_dprintf ("Walking: unimplemented type\n");			\
-	break;								\
-      }									\
+      if (type == 0)							\
+	{								\
+	  ctf_dprintf ("Walking: unimplemented type\n");		\
+	  break;							\
+	}								\
 									\
-    ctf_dprintf ("Looking up ID %i/%lx in type hashes\n",		\
-		 cited_type_input_num, type);				\
-    hashval = ctf_dynhash_lookup (d->cd_type_hashes, type_id);		\
-    if (!ctf_assert (output, hashval))					\
-      {									\
-	whaterr = "looking up ID in type hashes";			\
-	goto errlabel;							\
-      }									\
-    ctf_dprintf ("ID %i/%lx has hash %s\n", cited_type_input_num, type,	\
-		 hashval);						\
+      ctf_dprintf ("Looking up ID %i/%lx in type hashes\n",		\
+		   cited_type_input_num, type);				\
+      hashval = ctf_dynhash_lookup (d->cd_type_hashes, type_id);	\
+      if (!ctf_assert (output, hashval))				\
+	{								\
+	  whaterr = N_("error looking up ID in type hashes");		\
+	  goto errlabel;						\
+	}								\
+      ctf_dprintf ("ID %i/%lx has hash %s\n", cited_type_input_num, type, \
+		   hashval);						\
 									\
-    ret = ctf_dedup_rwalk_output_mapping (output, inputs, ninputs, parents, \
-					  already_visited, hashval,	\
-					  visit_fun, arg, depth);	\
-    if (ret < 0)							\
-      {									\
-	whaterr = errmsg;						\
-	goto errlabel;							\
-      }									\
-  } while (0)
+      ret = ctf_dedup_rwalk_output_mapping (output, inputs, ninputs, parents, \
+					    already_visited, hashval,	\
+					    visit_fun, arg, depth);	\
+      if (ret < 0)							\
+	{								\
+	  whaterr = errmsg;						\
+	  goto errlabel;						\
+	}								\
+    }									\
+  while (0)
 
   switch (ctf_type_kind_unsliced (fp, type))
     {
     case CTF_K_UNKNOWN:
-      /* Just skip things of unknown kind.  */
-      return 0;
     case CTF_K_FORWARD:
     case CTF_K_INTEGER:
     case CTF_K_FLOAT:
@@ -2048,7 +2085,7 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
     case CTF_K_POINTER:
     case CTF_K_SLICE:
       CTF_TYPE_WALK (ctf_type_reference (fp, type), err,
-		     "Referenced type walk");
+		     N_("error during referenced type walk"));
       break;
 
     case CTF_K_ARRAY:
@@ -2057,12 +2094,14 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
 
 	if (ctf_array_info (fp, type, &ar) < 0)
 	  {
-	    whaterr = "array info lookup";
+	    whaterr = N_("error during array info lookup");
 	    goto err_msg;
 	  }
 
-	CTF_TYPE_WALK (ar.ctr_contents, err, "Array contents type walk");
-	CTF_TYPE_WALK (ar.ctr_index, err, "Array index type walk");
+	CTF_TYPE_WALK (ar.ctr_contents, err,
+		       N_("error during array contents type walk"));
+	CTF_TYPE_WALK (ar.ctr_index, err,
+		       N_("error during array index type walk"));
 	break;
       }
 
@@ -2074,27 +2113,29 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
 
 	if (ctf_func_type_info (fp, type, &fi) < 0)
 	  {
-	    whaterr = "func type info lookup";
+	    whaterr = N_("error during func type info lookup");
 	    goto err_msg;
 	  }
 
-	CTF_TYPE_WALK (fi.ctc_return, err, "Func return type walk");
+	CTF_TYPE_WALK (fi.ctc_return, err,
+		       N_("error during func return type walk"));
 
 	if ((args = calloc (fi.ctc_argc, sizeof (ctf_id_t))) == NULL)
 	  {
-	    whaterr = "memory allocation";
+	    whaterr = N_("error doing memory allocation");
 	    goto err_msg;
 	  }
 
 	if (ctf_func_type_args (fp, type, fi.ctc_argc, args) < 0)
 	  {
-	    whaterr = "func arg type lookup";
+	    whaterr = N_("error doing func arg type lookup");
 	    free (args);
 	    goto err_msg;
 	  }
 
 	for (j = 0; j < fi.ctc_argc; j++)
-	  CTF_TYPE_WALK (args[j], err_free_args, "Func arg type walk");
+	  CTF_TYPE_WALK (args[j], err_free_args,
+			 N_("error during Func arg type walk"));
 	free (args);
 	break;
 
@@ -2108,8 +2149,8 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
 	 emitted later, in a separate pass.  */
 	break;
     default:
-      whaterr = "unknown type kind";
-      goto err;
+      whaterr = N_("CTF dict corruption: unknown type kind");
+      goto err_msg;
     }
 
   return visit_fun (hval, output, inputs, ninputs, parents, visited, fp, type,
@@ -2117,8 +2158,8 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
 
  err_msg:
   ctf_set_errno (output, ctf_errno (fp));
-  ctf_err_warn (fp, 0, "%s during type walking in %s at ID %lx: %s", whaterr,
-	       ctf_link_input_name (fp), type, ctf_errmsg (ctf_errno (fp)));
+  ctf_err_warn (output, 0, 0, _("%s in input file %s at type ID %lx"),
+		gettext (whaterr), ctf_link_input_name (fp), type);
  err:
   return -1;
 }
@@ -2128,17 +2169,17 @@ ctf_dedup_rwalk_one_output_mapping (ctf_file_t *output,
    once, but are not recursed through repeatedly: ALREADY_VISITED tracks whether
    types have already been visited.  */
 static int
-ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_rwalk_output_mapping (ctf_dict_t *output, ctf_dict_t **inputs,
 				uint32_t ninputs, uint32_t *parents,
 				ctf_dynset_t *already_visited,
 				const char *hval,
 				int (*visit_fun) (const char *hval,
-						  ctf_file_t *output,
-						  ctf_file_t **inputs,
+						  ctf_dict_t *output,
+						  ctf_dict_t **inputs,
 						  uint32_t ninputs,
 						  uint32_t *parents,
 						  int already_visited,
-						  ctf_file_t *input,
+						  ctf_dict_t *input,
 						  ctf_id_t type,
 						  void *id,
 						  int depth,
@@ -2157,8 +2198,8 @@ ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
   type_ids = ctf_dynhash_lookup (d->cd_output_mapping, hval);
   if (!type_ids)
     {
-      ctf_err_warn (output, 0, "looked up type kind by nonexistent "
-		    "hash %s.", hval);
+      ctf_err_warn (output, 0, ECTF_INTERNAL,
+		    _("looked up type kind by nonexistent hash %s"), hval);
       return ctf_set_errno (output, ECTF_INTERNAL);
     }
 
@@ -2175,8 +2216,8 @@ ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
       visited = 0;
       if (ctf_dynset_cinsert (already_visited, hval) < 0)
 	{
-	  ctf_err_warn (output, 0, "out of memory tracking already-visited "
-			"types.");
+	  ctf_err_warn (output, 0, ENOMEM,
+			_("out of memory tracking already-visited types"));
 	  return ctf_set_errno (output, ENOMEM);
 	}
     }
@@ -2213,8 +2254,7 @@ ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
     }
   if (err != ECTF_NEXT_END)
     {
-      ctf_err_warn (output, 0, "walking many types with one hash: %s",
-		    ctf_errmsg (err));
+      ctf_err_warn (output, 0, err, _("cannot walk conflicted type"));
       return ctf_set_errno (output, err);
     }
 
@@ -2223,7 +2263,7 @@ ctf_dedup_rwalk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
 
 typedef struct ctf_sort_om_cb_arg
 {
-  ctf_file_t **inputs;
+  ctf_dict_t **inputs;
   uint32_t ninputs;
   ctf_dedup_t *d;
 } ctf_sort_om_cb_arg_t;
@@ -2242,8 +2282,8 @@ sort_output_mapping (const ctf_next_hkv_t *one, const ctf_next_hkv_t *two,
   void *one_gid, *two_gid;
   uint32_t one_ninput;
   uint32_t two_ninput;
-  ctf_file_t *one_fp;
-  ctf_file_t *two_fp;
+  ctf_dict_t *one_fp;
+  ctf_dict_t *two_fp;
   ctf_id_t one_type;
   ctf_id_t two_type;
 
@@ -2289,15 +2329,15 @@ sort_output_mapping (const ctf_next_hkv_t *one, const ctf_next_hkv_t *two,
 
 /* The public entry point to ctf_dedup_rwalk_output_mapping, above.  */
 static int
-ctf_dedup_walk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_walk_output_mapping (ctf_dict_t *output, ctf_dict_t **inputs,
 			       uint32_t ninputs, uint32_t *parents,
 			       int (*visit_fun) (const char *hval,
-						 ctf_file_t *output,
-						 ctf_file_t **inputs,
+						 ctf_dict_t *output,
+						 ctf_dict_t **inputs,
 						 uint32_t ninputs,
 						 uint32_t *parents,
 						 int already_visited,
-						 ctf_file_t *input,
+						 ctf_dict_t *input,
 						 ctf_id_t type,
 						 void *id,
 						 int depth,
@@ -2311,7 +2351,7 @@ ctf_dedup_walk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
   void *k;
 
   if ((already_visited = ctf_dynset_create (htab_hash_string,
-					    ctf_dynset_eq_string,
+					    htab_eq_string,
 					    NULL)) == NULL)
     return ctf_set_errno (output, ENOMEM);
 
@@ -2336,8 +2376,7 @@ ctf_dedup_walk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
     }
   if (err != ECTF_NEXT_END)
     {
-      ctf_err_warn (output, 0, "recursing over output mapping: %s",
-		    ctf_errmsg (err));
+      ctf_err_warn (output, 0, err, _("cannot recurse over output mapping"));
       ctf_set_errno (output, err);
       goto err;
     }
@@ -2353,28 +2392,27 @@ ctf_dedup_walk_output_mapping (ctf_file_t *output, ctf_file_t **inputs,
    conflicted per-TU type ID in INPUT with hash HVAL.  Return its CTF ID, or 0
    if none was needed.  */
 static ctf_id_t
-ctf_dedup_maybe_synthesize_forward (ctf_file_t *output, ctf_file_t *target,
-				    ctf_file_t *input, ctf_id_t id,
+ctf_dedup_maybe_synthesize_forward (ctf_dict_t *output, ctf_dict_t *target,
+				    ctf_dict_t *input, ctf_id_t id,
 				    const char *hval)
 {
   ctf_dedup_t *od = &output->ctf_dedup;
   ctf_dedup_t *td = &target->ctf_dedup;
   int kind;
   int fwdkind;
-  const char *name;
+  const char *name = ctf_type_name_raw (input, id);
   const char *decorated;
   void *v;
   ctf_id_t emitted_forward;
 
   if (!ctf_dynset_exists (od->cd_conflicting_types, hval, NULL)
       || target->ctf_flags & LCTF_CHILD
-      || !ctf_type_name_raw (input, id)
+      || name[0] == '\0'
       || (((kind = ctf_type_kind_unsliced (input, id)) != CTF_K_STRUCT
 	   && kind != CTF_K_UNION && kind != CTF_K_FORWARD)))
     return 0;
 
   fwdkind = ctf_type_kind_forwarded (input, id);
-  name = ctf_type_name_raw (input, id);
 
   ctf_dprintf ("Using synthetic forward for conflicted struct/union with "
 	       "hval %s\n", hval);
@@ -2432,14 +2470,14 @@ ctf_dedup_maybe_synthesize_forward (ctf_file_t *output, ctf_file_t *target,
    make usability a bit better.  */
 
 static ctf_id_t
-ctf_dedup_id_to_target (ctf_file_t *output, ctf_file_t *target,
-			ctf_file_t **inputs, uint32_t ninputs,
-			uint32_t *parents, ctf_file_t *input, int input_num,
+ctf_dedup_id_to_target (ctf_dict_t *output, ctf_dict_t *target,
+			ctf_dict_t **inputs, uint32_t ninputs,
+			uint32_t *parents, ctf_dict_t *input, int input_num,
 			ctf_id_t id)
 {
   ctf_dedup_t *od = &output->ctf_dedup;
   ctf_dedup_t *td = &target->ctf_dedup;
-  ctf_file_t *err_fp = input;
+  ctf_dict_t *err_fp = input;
   const char *hval;
   void *target_id;
   ctf_id_t emitted_forward;
@@ -2490,8 +2528,8 @@ ctf_dedup_id_to_target (ctf_file_t *output, ctf_file_t *target,
       break;
     case -1:
       ctf_set_errno (err_fp, ctf_errno (output));
-      ctf_err_warn (err_fp, 0, "adding synthetic forward for type %i/%lx: "
-		    "%s", input_num, id, ctf_errmsg (ctf_errno (err_fp)));
+      ctf_err_warn (err_fp, 0, 0, _("cannot add synthetic forward for type "
+				    "%i/%lx"), input_num, id);
       return -1;
     default:
       return emitted_forward;
@@ -2518,10 +2556,10 @@ ctf_dedup_id_to_target (ctf_file_t *output, ctf_file_t *target,
 	case 0: /* No forward needed.  */
 	  break;
 	case -1:
-	  ctf_set_errno (err_fp, ctf_errno (output));
-	  ctf_err_warn (err_fp, 0, "adding synthetic forward for type %i/%lx: "
-			"%s", input_num, id, ctf_errmsg (ctf_errno (err_fp)));
-	  return -1;
+	  ctf_err_warn (err_fp, 0, ctf_errno (output),
+			_("cannot add synthetic forward for type %i/%lx"),
+			input_num, id);
+	  return ctf_set_errno (err_fp, ctf_errno (output));
 	default:
 	  return emitted_forward;
 	}
@@ -2537,7 +2575,7 @@ ctf_dedup_id_to_target (ctf_file_t *output, ctf_file_t *target,
    have already been emitted.  (This type itself may also have been emitted.)
 
    If the ARG is 1, this is a CU-mapped deduplication round mapping many
-   ctf_file_t's into precisely one: conflicting types should be marked
+   ctf_dict_t's into precisely one: conflicting types should be marked
    non-root-visible.  If the ARG is 0, conflicting types go into per-CU
    dictionaries stored in the input's ctf_dedup.cd_output: otherwise, everything
    is emitted directly into the output.  No struct/union members are emitted.
@@ -2548,16 +2586,16 @@ ctf_dedup_id_to_target (ctf_file_t *output, ctf_file_t *target,
    data object section, backtrace section etc).  */
 
 static int
-ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_emit_type (const char *hval, ctf_dict_t *output, ctf_dict_t **inputs,
 		     uint32_t ninputs, uint32_t *parents, int already_visited,
-		     ctf_file_t *input, ctf_id_t type, void *id, int depth,
+		     ctf_dict_t *input, ctf_id_t type, void *id, int depth,
 		     void *arg)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
   int kind = ctf_type_kind_unsliced (input, type);
   const char *name;
-  ctf_file_t *target = output;
-  ctf_file_t *real_input;
+  ctf_dict_t *target = output;
+  ctf_dict_t *real_input;
   const ctf_type_t *tp;
   int input_num = CTF_DEDUP_GID_TO_INPUT (id);
   int output_num = (uint32_t) -1;		/* 'shared' */
@@ -2570,7 +2608,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
   ctf_id_t ref;
   ctf_id_t maybe_dup = 0;
   ctf_encoding_t ep;
-  const char *erm;
+  const char *errtype;
   int emission_hashed = 0;
 
   /* We don't want to re-emit something we've already emitted.  */
@@ -2600,10 +2638,10 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 
 	  if ((target = ctf_create (&err)) == NULL)
 	    {
-	      ctf_err_warn (output, 0, "cannot create per-CU CTF archive "
-			    "for CU %s: %s", ctf_link_input_name (input),
-			    ctf_errmsg (err)); ctf_set_errno (output, err);
-	      return -1;
+	      ctf_err_warn (output, 0, err,
+			    _("cannot create per-CU CTF archive for CU %s"),
+			    ctf_link_input_name (input));
+	      return ctf_set_errno (output, err);
 	    }
 
 	  ctf_import_unref (target, output);
@@ -2621,11 +2659,10 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
   real_input = input;
   if ((tp = ctf_lookup_by_id (&real_input, type)) == NULL)
     {
-      ctf_err_warn (output, 0, "%s: lookup failure for type %lx: %s",
-		    ctf_link_input_name (real_input), type,
-		    ctf_errmsg (ctf_errno (input)));
-      ctf_set_errno (output, ctf_errno (input));
-      return -1;		/* errno is set for us.  */
+      ctf_err_warn (output, 0, ctf_errno (input),
+		    _("%s: lookup failure for type %lx"),
+		    ctf_link_input_name (real_input), type);
+      return ctf_set_errno (output, ctf_errno (input));
     }
 
   name = ctf_strraw (real_input, tp->ctt_name);
@@ -2659,15 +2696,17 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
   switch (kind)
     {
     case CTF_K_UNKNOWN:
-      /* These are types that CTF cannot encode, marked as such by the compile.
-	 We intentionally do not re-emit these.  */
-      new_type = 0;
+      /* These are types that CTF cannot encode, marked as such by the
+	 compiler.  */
+      errtype = _("unknown type");
+      if ((new_type = ctf_add_unknown (target, isroot, name)) == CTF_ERR)
+	goto err_target;
       break;
     case CTF_K_FORWARD:
       /* This will do nothing if the type to which this forwards already exists,
 	 and will be replaced with such a type if it appears later.  */
 
-      erm = "forward";
+      errtype = _("forward");
       if ((new_type = ctf_add_forward (target, isroot, name,
 				       ctf_type_kind_forwarded (input, type)))
 	  == CTF_ERR)
@@ -2676,7 +2715,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 
     case CTF_K_FLOAT:
     case CTF_K_INTEGER:
-      erm = "float/int";
+      errtype = _("float/int");
       if (ctf_type_encoding (input, type, &ep) < 0)
 	goto err_input;				/* errno is set for us.  */
       if ((new_type = ctf_add_encoded (target, isroot, name, &ep, kind))
@@ -2687,7 +2726,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
     case CTF_K_ENUM:
       {
 	int val;
-	erm = "enum";
+	errtype = _("enum");
 	if ((new_type = ctf_add_enum (target, isroot, name)) == CTF_ERR)
 	  goto err_input;				/* errno is set for us.  */
 
@@ -2695,10 +2734,11 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 	  {
 	    if (ctf_add_enumerator (target, new_type, name, val) < 0)
 	      {
-		ctf_err_warn (target, 0, "%s (%i): cannot add enumeration "
-			      "value %s from input type %lx: %s",
+		ctf_err_warn (target, 0, ctf_errno (target),
+			      _("%s (%i): cannot add enumeration value %s "
+				"from input type %lx"),
 			      ctf_link_input_name (input), input_num, name,
-			      type, ctf_errmsg (ctf_errno (target)));
+			      type);
 		ctf_next_destroy (i);
 		return ctf_set_errno (output, ctf_errno (target));
 	      }
@@ -2709,7 +2749,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
       }
 
     case CTF_K_TYPEDEF:
-      erm = "typedef";
+      errtype = _("typedef");
 
       ref = ctf_type_reference (input, type);
       if ((ref = ctf_dedup_id_to_target (output, target, inputs, ninputs,
@@ -2725,7 +2765,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
     case CTF_K_CONST:
     case CTF_K_RESTRICT:
     case CTF_K_POINTER:
-      erm = "pointer or cvr-qual";
+      errtype = _("pointer or cvr-qual");
 
       ref = ctf_type_reference (input, type);
       if ((ref = ctf_dedup_id_to_target (output, target, inputs, ninputs,
@@ -2738,7 +2778,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
       break;
 
     case CTF_K_SLICE:
-      erm = "slice";
+      errtype = _("slice");
 
       if (ctf_type_encoding (input, type, &ep) < 0)
 	goto err_input;				/* errno is set for us.  */
@@ -2757,7 +2797,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
       {
 	ctf_arinfo_t ar;
 
-	erm = "array info";
+	errtype = _("array info");
 	if (ctf_array_info (input, type, &ar) < 0)
 	  goto err_input;
 
@@ -2783,7 +2823,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 	ctf_id_t *args;
 	uint32_t j;
 
-	erm = "function";
+	errtype = _("function");
 	if (ctf_func_type_info (input, type, &fi) < 0)
 	  goto err_input;
 
@@ -2799,7 +2839,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 	    goto err_input;
 	  }
 
-	erm = "function args";
+	errtype = _("function args");
 	if (ctf_func_type_args (input, type, fi.ctc_argc, args) < 0)
 	  {
 	    free (args);
@@ -2832,7 +2872,7 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 	void *out_id;
 	/* Insert the structure itself, so other types can refer to it.  */
 
-	erm = "structure/union";
+	errtype = _("structure/union");
 	if (kind == CTF_K_STRUCT)
 	  new_type = ctf_add_struct_sized (target, isroot, name, size);
 	else
@@ -2846,13 +2886,17 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
 		     id, out_id);
 	/* Record the need to emit the members of this structure later.  */
 	if (ctf_dynhash_insert (d->cd_emission_struct_members, id, out_id) < 0)
-	  goto err_target;
+	  {
+	    ctf_set_errno (target, errno);
+	    goto err_target;
+	  }
 	break;
       }
     default:
-      ctf_err_warn (output, 0, "%s: unknown type kind for input type %lx",
+      ctf_err_warn (output, 0, ECTF_CORRUPT, _("%s: unknown type kind for "
+					       "input type %lx"),
 		    ctf_link_input_name (input), type);
-      return -1;
+      return ctf_set_errno (output, ECTF_CORRUPT);
     }
 
   if (!emission_hashed
@@ -2860,8 +2904,8 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
       && ctf_dynhash_cinsert (target->ctf_dedup.cd_output_emission_hashes,
 			      hval, (void *) (uintptr_t) new_type) < 0)
     {
-      ctf_err_warn (output, 0, "out of memory tracking deduplicated "
-		    "global type IDs");
+      ctf_err_warn (output, 0, ENOMEM, _("out of memory tracking deduplicated "
+					 "global type IDs"));
 	return ctf_set_errno (output, ENOMEM);
     }
 
@@ -2873,22 +2917,23 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
   return 0;
 
  oom_hash:
-  ctf_err_warn (output, 0, "out of memory creating emission-tracking hashes");
+  ctf_err_warn (output, 0, ENOMEM, _("out of memory creating emission-tracking "
+				     "hashes"));
   return ctf_set_errno (output, ENOMEM);
 
  err_input:
-  ctf_err_warn (output, 0, "%s (%i): while emitting deduplicated %s, error "
-		"getting input type %lx: %s", ctf_link_input_name (input),
-		input_num,erm, type, ctf_errmsg (ctf_errno (input)));
-  ctf_set_errno (output, ctf_errno (input));
-  return -1;
+  ctf_err_warn (output, 0, ctf_errno (input),
+		_("%s (%i): while emitting deduplicated %s, error getting "
+		  "input type %lx"), ctf_link_input_name (input),
+		input_num, errtype, type);
+  return ctf_set_errno (output, ctf_errno (input));
  err_target:
-  ctf_err_warn (output, 0, "%s (%i): while emitting deduplicated %s, error "
-		"emitting target type from input type %lx: %s",
-		ctf_link_input_name (input), input_num, erm, type,
-		ctf_errmsg (ctf_errno (target)));
-  ctf_set_errno (output, ctf_errno (target));
-  return -1;
+  ctf_err_warn (output, 0, ctf_errno (target),
+		_("%s (%i): while emitting deduplicated %s, error emitting "
+		  "target type from input type %lx"),
+		ctf_link_input_name (input), input_num,
+		errtype, type);
+  return ctf_set_errno (output, ctf_errno (target));
 }
 
 /* Traverse the cd_emission_struct_members and emit the members of all
@@ -2896,14 +2941,14 @@ ctf_dedup_emit_type (const char *hval, ctf_file_t *output, ctf_file_t **inputs,
    point.  */
 
 static int
-ctf_dedup_emit_struct_members (ctf_file_t *output, ctf_file_t **inputs,
+ctf_dedup_emit_struct_members (ctf_dict_t *output, ctf_dict_t **inputs,
 			       uint32_t ninputs, uint32_t *parents)
 {
   ctf_dedup_t *d = &output->ctf_dedup;
   ctf_next_t *i = NULL;
   void *input_id, *target_id;
   int err;
-  ctf_file_t *err_fp, *input_fp;
+  ctf_dict_t *err_fp, *input_fp;
   int input_num;
   ctf_id_t err_type;
 
@@ -2911,7 +2956,7 @@ ctf_dedup_emit_struct_members (ctf_file_t *output, ctf_file_t **inputs,
 				  &input_id, &target_id)) == 0)
     {
       ctf_next_t *j = NULL;
-      ctf_file_t *target;
+      ctf_dict_t *target;
       uint32_t target_num;
       ctf_id_t input_type, target_type;
       ssize_t offset;
@@ -2940,7 +2985,7 @@ ctf_dedup_emit_struct_members (ctf_file_t *output, ctf_file_t **inputs,
       target_type = CTF_DEDUP_GID_TO_TYPE (target_id);
 
       while ((offset = ctf_member_next (input_fp, input_type, &j, &name,
-					&membtype)) >= 0)
+					&membtype, 0)) >= 0)
 	{
 	  err_fp = target;
 	  err_type = target_type;
@@ -2978,111 +3023,14 @@ ctf_dedup_emit_struct_members (ctf_file_t *output, ctf_file_t **inputs,
   return 0;
  err_target:
   ctf_next_destroy (i);
-  ctf_err_warn (output, 0, "%s (%i): error emitting members for structure "
-		"type %lx: %s", ctf_link_input_name (input_fp), input_num,
-		err_type, ctf_errmsg (ctf_errno (err_fp)));
-  ctf_set_errno (output, ctf_errno (err_fp));
-  return -1;
+  ctf_err_warn (output, 0, ctf_errno (err_fp),
+		_("%s (%i): error emitting members for structure type %lx"),
+		ctf_link_input_name (input_fp), input_num, err_type);
+  return ctf_set_errno (output, ctf_errno (err_fp));
  iterr:
-  ctf_err_warn (output, 0, "iteration failure emitting structure members: %s",
-		ctf_errmsg (err));
-  ctf_set_errno (output, err);
-  return -1;
-}
-
-/* Populate the type mapping used by the types in one FP (which must be an input
-   dict containing a non-null cd_output resulting from a ctf_dedup_emit_type
-   walk).  */
-static int
-ctf_dedup_populate_type_mapping (ctf_file_t *shared, ctf_file_t *fp,
-				 ctf_file_t **inputs)
-{
-  ctf_dedup_t *d = &shared->ctf_dedup;
-  ctf_file_t *output = fp->ctf_dedup.cd_output;
-  const void *k, *v;
-  ctf_next_t *i = NULL;
-  int err;
-
-  /* The shared dict (the output) stores its types in the fp itself, not in a
-     separate cd_output dict.  */
-  if (shared == fp)
-    output = fp;
-
-  /* There may be no types to emit at all, or all the types in this TU may be
-     shared.  */
-  if (!output || !output->ctf_dedup.cd_output_emission_hashes)
-    return 0;
-
-  while ((err = ctf_dynhash_cnext (output->ctf_dedup.cd_output_emission_hashes,
-				  &i, &k, &v)) == 0)
-    {
-      const char *hval = (const char *) k;
-      ctf_id_t id_out = (ctf_id_t) (uintptr_t) v;
-      ctf_next_t *j = NULL;
-      ctf_dynset_t *type_ids;
-      const void *id;
-
-      type_ids = ctf_dynhash_lookup (d->cd_output_mapping, hval);
-      if (!ctf_assert (shared, type_ids))
-	return -1;
-#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
-      ctf_dprintf ("Traversing emission hash: hval %s\n", hval);
-#endif
-
-      while ((err = ctf_dynset_cnext (type_ids, &j, &id)) == 0)
-	{
-	  ctf_file_t *input = inputs[CTF_DEDUP_GID_TO_INPUT (id)];
-	  ctf_id_t id_in = CTF_DEDUP_GID_TO_TYPE (id);
-
-#ifdef ENABLE_LIBCTF_HASH_DEBUGGING
-	  ctf_dprintf ("Adding mapping from %i/%lx to %lx\n",
-		       CTF_DEDUP_GID_TO_INPUT (id), id_in, id_out);
-#endif
-	  ctf_add_type_mapping (input, id_in, output, id_out);
-	}
-      if (err != ECTF_NEXT_END)
-	{
-	  ctf_next_destroy (i);
-	  goto err;
-	}
-    }
-  if (err != ECTF_NEXT_END)
-    goto err;
-
-  return 0;
-
- err:
-  ctf_err_warn (shared, 0, "iteration error populating the type mapping: %s",
-		ctf_errmsg (err));
-  return ctf_set_errno (shared, err);
-}
-
-/* Populate the type mapping machinery used by the rest of the linker,
-   by ctf_add_type, etc.  */
-static int
-ctf_dedup_populate_type_mappings (ctf_file_t *output, ctf_file_t **inputs,
-				  uint32_t ninputs)
-{
-  size_t i;
-
-  if (ctf_dedup_populate_type_mapping (output, output, inputs) < 0)
-    {
-      ctf_err_warn (output, 0, "cannot populate type mappings for shared "
-		    "CTF dict: %s", ctf_errmsg (ctf_errno (output)));
-      return -1;				/* errno is set for us.  */
-    }
-
-  for (i = 0; i < ninputs; i++)
-    {
-      if (ctf_dedup_populate_type_mapping (output, inputs[i], inputs) < 0)
-	{
-	  ctf_err_warn (output, 0, "cannot populate type mappings for per-CU "
-			"CTF dict: %s", ctf_errmsg (ctf_errno (inputs[i])));
-	  return ctf_set_errno (output, ctf_errno (inputs[i]));
-	}
-    }
-
-  return 0;
+  ctf_err_warn (output, 0, err, _("iteration failure emitting "
+				  "structure members"));
+  return ctf_set_errno (output, err);
 }
 
 /* Emit deduplicated types into the outputs.  The shared type repository is
@@ -3097,13 +3045,13 @@ ctf_dedup_populate_type_mappings (ctf_file_t *output, ctf_file_t **inputs,
    If CU_MAPPED is set, this is a first pass for a link with a non-empty CU
    mapping: only one output will result.  */
 
-ctf_file_t **
-ctf_dedup_emit (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
+ctf_dict_t **
+ctf_dedup_emit (ctf_dict_t *output, ctf_dict_t **inputs, uint32_t ninputs,
 		uint32_t *parents, uint32_t *noutputs, int cu_mapped)
 {
   size_t num_outputs = 1;		/* Always at least one output: us.  */
-  ctf_file_t **outputs;
-  ctf_file_t **walk;
+  ctf_dict_t **outputs;
+  ctf_dict_t **walk;
   size_t i;
 
   ctf_dprintf ("Triggering emission.\n");
@@ -3115,9 +3063,6 @@ ctf_dedup_emit (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
   if (ctf_dedup_emit_struct_members (output, inputs, ninputs, parents) < 0)
     return NULL;				/* errno is set for us.  */
 
-  if (ctf_dedup_populate_type_mappings (output, inputs, ninputs) < 0)
-    return NULL;				/* errno is set for us.  */
-
   for (i = 0; i < ninputs; i++)
     {
       if (inputs[i]->ctf_dedup.cd_output)
@@ -3127,9 +3072,10 @@ ctf_dedup_emit (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
   if (!ctf_assert (output, !cu_mapped || (cu_mapped && num_outputs == 1)))
     return NULL;
 
-  if ((outputs = calloc (num_outputs, sizeof (ctf_file_t *))) == NULL)
+  if ((outputs = calloc (num_outputs, sizeof (ctf_dict_t *))) == NULL)
     {
-      ctf_err_warn (output, 0, "out of memory allocating link outputs array");
+      ctf_err_warn (output, 0, ENOMEM,
+		    _("out of memory allocating link outputs array"));
       ctf_set_errno (output, ENOMEM);
       return NULL;
     }
@@ -3150,6 +3096,76 @@ ctf_dedup_emit (ctf_file_t *output, ctf_file_t **inputs, uint32_t ninputs,
 	}
     }
 
-  ctf_dedup_fini (output, outputs, num_outputs);
   return outputs;
+}
+
+/* Determine what type SRC_FP / SRC_TYPE was emitted as in the FP, which
+   must be the shared dict or have it as a parent: return 0 if none.  The SRC_FP
+   must be a past input to ctf_dedup.  */
+
+ctf_id_t
+ctf_dedup_type_mapping (ctf_dict_t *fp, ctf_dict_t *src_fp, ctf_id_t src_type)
+{
+  ctf_dict_t *output = NULL;
+  ctf_dedup_t *d;
+  int input_num;
+  void *num_ptr;
+  void *type_ptr;
+  int found;
+  const char *hval;
+
+  /* It is an error (an internal error in the caller, in ctf-link.c) to call
+     this with an FP that is not a per-CU output or shared output dict, or with
+     a SRC_FP that was not passed to ctf_dedup as an input; it is an internal
+     error in ctf-dedup for the type passed not to have been hashed, though if
+     the src_fp is a child dict and the type is not a child type, it will have
+     been hashed under the GID corresponding to the parent.  */
+
+  if (fp->ctf_dedup.cd_type_hashes != NULL)
+    output = fp;
+  else if (fp->ctf_parent && fp->ctf_parent->ctf_dedup.cd_type_hashes != NULL)
+    output = fp->ctf_parent;
+  else
+    {
+      ctf_set_errno (fp, ECTF_INTERNAL);
+      ctf_err_warn (fp, 0, ECTF_INTERNAL,
+		    _("dict %p passed to ctf_dedup_type_mapping is not a "
+		      "deduplicated output"), (void *) fp);
+      return CTF_ERR;
+    }
+
+  if (src_fp->ctf_parent && ctf_type_isparent (src_fp, src_type))
+    src_fp = src_fp->ctf_parent;
+
+  d = &output->ctf_dedup;
+
+  found = ctf_dynhash_lookup_kv (d->cd_input_nums, src_fp, NULL, &num_ptr);
+  if (!ctf_assert (output, found != 0))
+    return CTF_ERR;				/* errno is set for us.  */
+  input_num = (uintptr_t) num_ptr;
+
+  hval = ctf_dynhash_lookup (d->cd_type_hashes,
+			     CTF_DEDUP_GID (output, input_num, src_type));
+
+  if (!ctf_assert (output, hval != NULL))
+    return CTF_ERR;				/* errno is set for us.  */
+
+  /* The emission hashes may be unset if this dict was created after
+     deduplication to house variables or other things that would conflict if
+     stored in the shared dict.  */
+  if (fp->ctf_dedup.cd_output_emission_hashes)
+    if (ctf_dynhash_lookup_kv (fp->ctf_dedup.cd_output_emission_hashes, hval,
+			       NULL, &type_ptr))
+      return (ctf_id_t) (uintptr_t) type_ptr;
+
+  if (fp->ctf_parent)
+    {
+      ctf_dict_t *pfp = fp->ctf_parent;
+      if (pfp->ctf_dedup.cd_output_emission_hashes)
+	if (ctf_dynhash_lookup_kv (pfp->ctf_dedup.cd_output_emission_hashes,
+				   hval, NULL, &type_ptr))
+	  return (ctf_id_t) (uintptr_t) type_ptr;
+    }
+
+  return 0;
 }
