@@ -3357,6 +3357,17 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	  r = bfd_check_overflow (howto->complain_on_overflow, 12, 0, 32, delta);
 	  if (r != bfd_reloc_overflow)
 	    bfd_putl32 (bfd_getl32 (buf) | ENCODE_ITYPE_IMM (delta), buf);
+
+    /* Add a R_RISCV_RELOCID reloc to specify vendor.  */
+    if (pretend_im_corevid && fixP->fx_tcbit && fixP->fx_addsy != NULL)
+      {
+        fixP->fx_next = xmemdup (fixP, sizeof (*fixP), sizeof (*fixP));
+        fixP->fx_next->fx_addsy = fixP->fx_next->fx_subsy = NULL;
+        fixP->fx_next->fx_r_type = BFD_RELOC_RISCV_RELOCID;
+        fixP->fx_next->fx_size = 0;
+        /* offset aka ID */
+        fixP->fx_next->fx_offset = 100;
+      }
 	}
       break;
 
@@ -3438,17 +3449,6 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
       fixP->fx_next->fx_addsy = fixP->fx_next->fx_subsy = NULL;
       fixP->fx_next->fx_r_type = BFD_RELOC_RISCV_RELAX;
       fixP->fx_next->fx_size = 0;
-    }
-
-  /* Add a R_RISCV_RELOCID reloc to specify vendor.  */
-	//TODO
-  if (pretend_im_corevid && fixP->fx_tcbit && fixP->fx_addsy != NULL)
-    {
-      fixP->fx_next = xmemdup (fixP, sizeof (*fixP), sizeof (*fixP));
-      fixP->fx_next->fx_addsy = fixP->fx_next->fx_subsy = NULL;
-      fixP->fx_next->fx_r_type = BFD_RELOC_RISCV_RELOCID;
-      fixP->fx_next->fx_size = 0;
-      fixP->fx_next->fx_offset = 100;
     }
 }
 

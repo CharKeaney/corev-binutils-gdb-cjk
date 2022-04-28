@@ -926,6 +926,41 @@ static reloc_howto_type howto_table[] =
 	 false),				/* pcrel_offset */
 };
 
+static reloc_howto_type SECONDARYhowto_table[] = {
+// so here we would have a howto table for corev for example
+// vendor specific howto table?
+  /* CORE-V Specific.  */
+  /* 12-bit PC-relative offset, for hwloop.  */
+  HOWTO (R_RISCV_CVPCREL_UI12,		/* type */
+	 1,				/* rightshift */
+	 2,				/* size */
+	 32,				/* bitsize */
+	 true,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_unsigned,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_CVPCREL_UI12",	/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 ENCODE_ITYPE_IMM (-1U),	/* dst_mask */
+	 true),				/* pcrel_offset */
+
+  /* Relocation handling prototype */
+  HOWTO (R_RISCV_RELOCID,		/* type */
+	 0,				/* rightshift */
+	 3,				/* size */
+	 32,				/* bitsize */
+	 false,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_RELOCID",	/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 0,	/* dst_mask */
+	 false),				/* pcrel_offset */
+};
+
 /* A mapping from BFD reloc types to RISC-V ELF reloc types.  */
 struct elf_reloc_map
 {
@@ -992,6 +1027,8 @@ static const struct elf_reloc_map riscv_reloc_map[] =
   { BFD_RELOC_RISCV_RELOCID, R_RISCV_RELOCID },
 };
 
+// TODO somehow also check the secondary howto table
+// or create new function?
 reloc_howto_type *
 riscv_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED, const char *r_name)
 {

@@ -1646,10 +1646,13 @@ perform_relocation (const reloc_howto_type *howto,
       break;
 
     /* Relocation handling prototype */
-    /* Placeholder for now, but might want to encode here. */
     case R_RISCV_RELOCID:
-      if (type == R_RISCV_CVPCREL_UI12)
-        // call function that implements functionality 
+      // not sure about the -1?
+      /*switch (value) {
+        case 100:*/
+        //return riscv_elf_rtype_to_howto(ELFNN_R_TYPE (rel->r_info));
+        //return get_howto_from_table(&SECONDARYhowto_table, rel);
+        break;
 
     case R_RISCV_LO12_I:
     case R_RISCV_GPREL_I:
