@@ -1646,13 +1646,13 @@ perform_relocation (const reloc_howto_type *howto,
       break;
 
     /* Relocation handling prototype */
-    case R_RISCV_RELOCID:
-      // not sure about the -1?
-      /*switch (value) {
-        case 100:*/
-        //return riscv_elf_rtype_to_howto(ELFNN_R_TYPE (rel->r_info));
+    /*case R_RISCV_RELOCID:
+      switch (value) {
+        case 100:
+        return riscv_elf_rtype_to_howto_custom(ELFNN_R_TYPE (rel->r_info));
         //return get_howto_from_table(&SECONDARYhowto_table, rel);
-        break;
+        return bfd_reloc_ok;
+        break;*/
 
     case R_RISCV_LO12_I:
     case R_RISCV_GPREL_I:
@@ -5173,6 +5173,7 @@ riscv_elf_is_target_special_symbol (bfd *abfd, asymbol *sym)
 #define elf_backend_reloc_type_class		riscv_reloc_type_class
 
 #define bfd_elfNN_bfd_reloc_name_lookup		riscv_reloc_name_lookup
+#define bfd_elfNN_bfd_reloc_name_lookup_custom		riscv_reloc_name_lookup_custom
 #define bfd_elfNN_bfd_link_hash_table_create	riscv_elf_link_hash_table_create
 #define bfd_elfNN_bfd_reloc_type_lookup		riscv_reloc_type_lookup
 #define bfd_elfNN_bfd_merge_private_bfd_data \

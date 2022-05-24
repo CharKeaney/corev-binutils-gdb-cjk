@@ -47,6 +47,9 @@
 static bfd_reloc_status_type riscv_elf_add_sub_reloc
   (bfd *, arelent *, asymbol *, void *, asection *, bfd *, char **);
 
+static bfd_reloc_status_type riscv_elf_custom_relocid
+  (bfd *, arelent *, asymbol *, void *, asection *, bfd *, char **);
+
 /* The relocation table used for SHT_RELA sections.  */
 
 static reloc_howto_type howto_table[] =
@@ -953,7 +956,7 @@ static reloc_howto_type SECONDARYhowto_table[] = {
 	 false,				/* pc_relative */
 	 0,				/* bitpos */
 	 complain_overflow_dont,	/* complain_on_overflow */
-	 bfd_elf_generic_reloc,		/* special_function */
+	 riscv_elf_custom_relocid,		/* special_function */
 	 "R_RISCV_RELOCID",	/* name */
 	 false,				/* partial_inplace */
 	 0,				/* src_mask */
@@ -1041,6 +1044,19 @@ riscv_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED, const char *r_name)
   return NULL;
 }
 
+// custom WIP
+/*reloc_howto_type *
+riscv_reloc_name_lookup_custom (bfd *abfd ATTRIBUTE_UNUSED, const char *r_name)
+{
+  unsigned int i;
+
+  for (i = 0; i < ARRAY_SIZE (howto_table); i++)
+    if (SECONDARYhowto_table[i].name && strcasecmp (SECONDARYhowto_table[i].name, r_name) == 0)
+      return &SECONDARYhowto_table[i];
+
+  return NULL;
+}*/
+
 reloc_howto_type *
 riscv_elf_rtype_to_howto (bfd *abfd, unsigned int r_type)
 {
@@ -1056,6 +1072,23 @@ riscv_elf_rtype_to_howto (bfd *abfd, unsigned int r_type)
   bfd_set_error (bfd_error_bad_value);
   return NULL;
 }
+
+/*reloc_howto_type *
+riscv_elf_rtype_to_howto_custom (bfd *abfd, unsigned int r_type)
+{
+  unsigned int i;
+  for (i = 0; i < ARRAY_SIZE (SECONDARYhowto_table); i++)
+    {
+      if (r_type == SECONDARYhowto_table[i].type)
+	return &SECONDARYhowto_table[i];
+    }
+
+  (*_bfd_error_handler) (_("%pB: unsupported relocation type %#x"),
+			 abfd, r_type);
+  bfd_set_error (bfd_error_bad_value);
+  return NULL;
+}*/
+
 
 /* Given a BFD reloc type, return a howto structure.  */
 
@@ -1118,6 +1151,48 @@ riscv_elf_add_sub_reloc (bfd *abfd,
     case R_RISCV_SUB32:
     case R_RISCV_SUB64:
       relocation = old_value - relocation;
+      break;
+    }
+  bfd_put (howto->bitsize, abfd, relocation, data + reloc_entry->address);
+
+  return bfd_reloc_ok;
+}
+
+// custom for RELOCID
+static bfd_reloc_status_type
+riscv_elf_custom_relocid (bfd *abfd,
+			 arelent *reloc_entry,
+			 asymbol *symbol,
+			 void *data,
+			 asection *input_section,
+			 bfd *output_bfd,
+			 char **error_message ATTRIBUTE_UNUSED)
+       // do i need this?
+       //bfd_vma value)
+{
+  reloc_howto_type *howto = reloc_entry->howto;
+  bfd_vma relocation;
+
+  if (output_bfd != NULL
+      && (symbol->flags & BSF_SECTION_SYM) == 0
+      && (!reloc_entry->howto->partial_inplace || reloc_entry->addend == 0))
+    {
+      reloc_entry->address += input_section->output_offset;
+      return bfd_reloc_ok;
+    }
+
+  if (output_bfd != NULL)
+    return bfd_reloc_continue;
+
+  relocation = symbol->value + symbol->section->output_section->vma
+    + symbol->section->output_offset + reloc_entry->addend;
+  bfd_vma old_value = bfd_get (howto->bitsize, abfd,
+			       data + reloc_entry->address);
+
+  switch (howto->type)
+    {
+    case R_RISCV_CVPCREL_UI12:
+      symbol->value = ENCODE_CV_HWLP_UIMM5(symbol->value >> howto->rightshift);
       break;
     }
   bfd_put (howto->bitsize, abfd, relocation, data + reloc_entry->address);
