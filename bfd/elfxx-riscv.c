@@ -941,7 +941,7 @@ static reloc_howto_type SECONDARYhowto_table[] = {
 	 true,				/* pc_relative */
 	 0,				/* bitpos */
 	 complain_overflow_unsigned,	/* complain_on_overflow */
-	 bfd_elf_generic_reloc,		/* special_function */
+	 riscv_elf_custom_relocid,		/* special_function */
 	 "R_RISCV_CVPCREL_UI12",	/* name */
 	 false,				/* partial_inplace */
 	 0,				/* src_mask */
@@ -956,7 +956,7 @@ static reloc_howto_type SECONDARYhowto_table[] = {
 	 false,				/* pc_relative */
 	 0,				/* bitpos */
 	 complain_overflow_dont,	/* complain_on_overflow */
-	 riscv_elf_custom_relocid,		/* special_function */
+	 bfd_elf_generic_reloc,		/* special_function */
 	 "R_RISCV_RELOCID",	/* name */
 	 false,				/* partial_inplace */
 	 0,				/* src_mask */

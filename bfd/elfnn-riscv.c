@@ -1646,13 +1646,15 @@ perform_relocation (const reloc_howto_type *howto,
       break;
 
     /* Relocation handling prototype */
-    /*case R_RISCV_RELOCID:
+    case R_RISCV_RELOCID:
       switch (value) {
         case 100:
-        return riscv_elf_rtype_to_howto_custom(ELFNN_R_TYPE (rel->r_info));
+            ;
+        //return riscv_elf_custom_relocid(ELFNN_R_TYPE (rel->r_info));
         //return get_howto_from_table(&SECONDARYhowto_table, rel);
-        return bfd_reloc_ok;
-        break;*/
+        //return bfd_reloc_ok;
+        }
+        break;
 
     case R_RISCV_LO12_I:
     case R_RISCV_GPREL_I:
