@@ -1649,8 +1649,8 @@ perform_relocation (const reloc_howto_type *howto,
     case R_RISCV_RELOCID:
       switch (value) {
         case 100:
-            ;
-        //return riscv_elf_custom_relocid(ELFNN_R_TYPE (rel->r_info));
+        //    ;
+          return riscv_elf_custom_relocid(ELFNN_R_TYPE (rel->r_info));
         //return get_howto_from_table(&SECONDARYhowto_table, rel);
         //return bfd_reloc_ok;
         }
@@ -5175,7 +5175,6 @@ riscv_elf_is_target_special_symbol (bfd *abfd, asymbol *sym)
 #define elf_backend_reloc_type_class		riscv_reloc_type_class
 
 #define bfd_elfNN_bfd_reloc_name_lookup		riscv_reloc_name_lookup
-#define bfd_elfNN_bfd_reloc_name_lookup_custom		riscv_reloc_name_lookup_custom
 #define bfd_elfNN_bfd_link_hash_table_create	riscv_elf_link_hash_table_create
 #define bfd_elfNN_bfd_reloc_type_lookup		riscv_reloc_type_lookup
 #define bfd_elfNN_bfd_merge_private_bfd_data \
