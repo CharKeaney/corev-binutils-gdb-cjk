@@ -1189,9 +1189,9 @@ riscv_elf_custom_relocid (bfd *abfd,
   bfd_vma old_value = bfd_get (howto->bitsize, abfd,
 			       data + reloc_entry->address);
 
-  switch (howto->type)
+  switch (symbol->value)
     {
-    case R_RISCV_CVPCREL_UI12:
+    case 100:
       symbol->value = ENCODE_CV_HWLP_UIMM5(symbol->value >> howto->rightshift);
       break;
     }
