@@ -19,7 +19,7 @@ zcb:
     cm.lb x8,(x8)
     cm.lbu x8,(x8)
     cm.lh x8,2(x8)
-	cm.lhu x8,2(x8)
+    cm.lhu x8,2(x8)
     cm.sb x8,2(x10)
     cm.sh x8,2(x8)
     cm.push {ra}, -64
