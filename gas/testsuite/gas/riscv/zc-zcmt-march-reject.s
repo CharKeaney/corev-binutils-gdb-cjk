@@ -1,5 +1,6 @@
-# Test to ensure gas rejects those operations not within Zcb when running with Zcb march flags.
-zcb:
+# Test to ensure gas rejects those operations not within Zcmt when running with
+# Zcmt march flags.
+zcmt:
     c.flw fa0, 0(a0)
     c.flw fa0, 0(sp)
     c.fsw fa0, 0(a0)

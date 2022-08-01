@@ -1,5 +1,6 @@
-# Test to ensure gas rejects those operations not within Zcb when running with Zcb march flags.
-zcb:
+# Test to ensure gas rejects those operations not within Zcmpe when running
+# with Zcmpe march flags.
+zcmpe:
     c.flw fa0, 0(a0)
     c.flw fa0, 0(sp)
     c.fsw fa0, 0(a0)
@@ -19,7 +20,7 @@ zcb:
     cm.lb x8,(x8)
     cm.lbu x8,(x8)
     cm.lh x8,2(x8)
-	cm.lhu x8,2(x8)
+    cm.lhu x8,2(x8)
     cm.sb x8,2(x10)
     cm.sh x8,2(x8)
     cm.mva01s s0, s7
