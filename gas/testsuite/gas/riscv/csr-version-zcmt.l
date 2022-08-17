@@ -253,5 +253,3 @@
 .*Warning: invalid CSR `vlenb' for the current ISA
 .*Warning: invalid CSR `vlenb' for the current ISA
 .*Warning: read-only CSR is written `csrw vlenb,a1'
-.*Warning: invalid CSR `jvt' for the current ISA
-.*Warning: invalid CSR `jvt' for the current ISA
